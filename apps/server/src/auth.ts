@@ -24,6 +24,8 @@ export async function verifyToken(token: unknown): Promise<AuthUser> {
   if (typeof token !== 'string' || !token) throw new Error('missing token');
   const { payload } = await jwtVerify(token, secret, { algorithms: ['HS256'] });
   if (!payload.sub || typeof payload.name !== 'string') throw new Error('bad token');
+  // Only nickname-login ids: old anonymous tokens could show a name that now belongs to someone else.
+  if (!payload.sub.startsWith('p_')) throw new Error('token expired: please log in again');
   return { playerId: payload.sub, name: payload.name };
 }
 

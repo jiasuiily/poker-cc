@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { buildReplayFrames } from '@poker/core';
 import { analyzeHand, ENGINE_VERSION, type DecisionReport } from '@poker/strategy';
 import type { Db } from '../db/client.js';
@@ -44,9 +44,15 @@ async function takeQuota(db: Db, playerId: string, limit: number): Promise<boole
   return (row?.count ?? 1) <= limit;
 }
 
+/** A 'pending' LLM step older than this is treated as abandoned (e.g. the server restarted). */
+const STALE_PENDING_SECONDS = 60;
+
+const keyOf = (handId: string, playerId: string) => and(eq(handAnalyses.handId, handId), eq(handAnalyses.playerId, playerId));
+
 /**
- * Local analysis is computed (or read from cache) and returned at once. When an LLM is
- * configured and quota allows, commentary is fetched in the background (`job`) and stored.
+ * Local analysis is computed once per engine version and returned at once. The LLM step is
+ * claimed atomically, so a double click calls the model once; failed, limited, disabled and
+ * stale pending steps can be claimed again by a later request.
  */
 export async function requestAnalysis(
   db: Db,
@@ -58,39 +64,61 @@ export async function requestAnalysis(
   const hand = await loadHandForPlayer(db, handId, playerId);
   if (hand.status !== 'ok') return hand;
 
-  const [cached] = await db
-    .select()
-    .from(handAnalyses)
-    .where(and(eq(handAnalyses.handId, handId), eq(handAnalyses.playerId, playerId)));
-  if (cached && cached.engineVersion === ENGINE_VERSION) {
-    return { status: 'ok', analysis: { decisions: cached.decisions as DecisionReport[], llmStatus: cached.llmStatus as LlmStatus, llmText: cached.llmText } };
+  // 1) Local analysis row (idempotent; concurrent first requests converge on one row).
+  const [existing] = await db.select().from(handAnalyses).where(keyOf(handId, playerId));
+  let decisions = existing?.decisions as DecisionReport[] | undefined;
+  if (!existing || existing.engineVersion !== ENGINE_VERSION) {
+    decisions = analyzeHand(hand.events, hand.meta.heroSeat);
+    await db
+      .insert(handAnalyses)
+      .values({ handId, playerId, engineVersion: ENGINE_VERSION, decisions, llmText: null, llmStatus: 'failed', createdAt: new Date(0) })
+      .onConflictDoUpdate({
+        target: [handAnalyses.handId, handAnalyses.playerId],
+        set: { engineVersion: ENGINE_VERSION, decisions, llmText: null, llmStatus: 'failed', createdAt: new Date(0) },
+        setWhere: sql`${handAnalyses.engineVersion} <> ${ENGINE_VERSION}`,
+      });
   }
 
-  const decisions = analyzeHand(hand.events, hand.meta.heroSeat);
-  const llmStatus: LlmStatus = !llm ? 'disabled' : (await takeQuota(db, playerId, env.dailyLimit)) ? 'pending' : 'limited';
-  const row = { handId, playerId, engineVersion: ENGINE_VERSION, decisions, llmText: null, llmStatus };
-  await db
-    .insert(handAnalyses)
-    .values(row)
-    .onConflictDoUpdate({ target: [handAnalyses.handId, handAnalyses.playerId], set: { engineVersion: ENGINE_VERSION, decisions, llmText: null, llmStatus } });
-
-  let job: Promise<void> | undefined;
-  if (llmStatus === 'pending' && llm) {
-    const { system, user } = buildPrompt(hand.meta, buildReplayFrames(hand.events, hand.meta.heroSeat), decisions);
-    job = (async () => {
-      let text: string | null = null;
-      let status: LlmStatus = 'failed';
-      try {
-        text = await llm.explain(system, user, AbortSignal.timeout(env.timeoutMs ?? 30_000));
-        status = 'ok';
-      } catch (e) {
-        console.error(`[analysis ${handId}] LLM failed: ${e instanceof Error ? e.message : String(e)}`);
-      }
-      await db
-        .update(handAnalyses)
-        .set({ llmText: text, llmStatus: status })
-        .where(and(eq(handAnalyses.handId, handId), eq(handAnalyses.playerId, playerId)));
-    })().catch((e) => console.error(`[analysis ${handId}] could not store LLM result`, e));
+  // 2) Claim the LLM step: only one request wins; ok and fresh pending are left alone.
+  const read = async (): Promise<AnalysisResponse> => (await getAnalysis(db, handId, playerId))!;
+  if (!llm) {
+    await db
+      .update(handAnalyses)
+      .set({ llmStatus: 'disabled' })
+      .where(and(keyOf(handId, playerId), sql`${handAnalyses.llmStatus} <> 'ok'`));
+    return { status: 'ok', analysis: await read() };
   }
-  return { status: 'ok', analysis: { decisions, llmStatus, llmText: null }, job };
+  const claimed = await db
+    .update(handAnalyses)
+    .set({ llmStatus: 'pending', createdAt: sql`now()` })
+    .where(
+      and(
+        keyOf(handId, playerId),
+        or(
+          inArray(handAnalyses.llmStatus, ['failed', 'limited', 'disabled']),
+          and(eq(handAnalyses.llmStatus, 'pending'), sql`${handAnalyses.createdAt} < now() - interval '${sql.raw(String(STALE_PENDING_SECONDS))} seconds'`),
+        ),
+      ),
+    )
+    .returning({ handId: handAnalyses.handId });
+  if (claimed.length === 0) return { status: 'ok', analysis: await read() };
+
+  if (!(await takeQuota(db, playerId, env.dailyLimit))) {
+    await db.update(handAnalyses).set({ llmStatus: 'limited' }).where(keyOf(handId, playerId));
+    return { status: 'ok', analysis: await read() };
+  }
+
+  const { system, user } = buildPrompt(hand.meta, buildReplayFrames(hand.events, hand.meta.heroSeat), decisions ?? []);
+  const job = (async () => {
+    let text: string | null = null;
+    let status: LlmStatus = 'failed';
+    try {
+      text = await llm.explain(system, user, AbortSignal.timeout(env.timeoutMs ?? 30_000));
+      status = 'ok';
+    } catch (e) {
+      console.error(`[analysis ${handId}] LLM failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    await db.update(handAnalyses).set({ llmText: text, llmStatus: status }).where(keyOf(handId, playerId));
+  })().catch((e) => console.error(`[analysis ${handId}] could not store LLM result`, e));
+  return { status: 'ok', analysis: await read(), job };
 }

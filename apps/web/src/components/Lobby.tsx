@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type Session, type TableListing } from '../net/api';
+import { LevelStyleFields, type BotLevelChoice, type BotStyleChoice } from './BotPicker';
 
 const STAKES = [
   [5, 10],
@@ -14,6 +15,8 @@ export function Lobby({ session, onJoin, onLogout }: { session: Session; onJoin:
   const [maxSeats, setMaxSeats] = useState(6);
   const [stake, setStake] = useState(0);
   const [bots, setBots] = useState(3);
+  const [botLevel, setBotLevel] = useState<BotLevelChoice>('advanced');
+  const [botStyle, setBotStyle] = useState<BotStyleChoice>('random');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -42,6 +45,8 @@ export function Lobby({ session, onJoin, onLogout }: { session: Session; onJoin:
         smallBlind,
         bigBlind,
         bots: Math.min(bots, maxSeats - 1),
+        botLevel,
+        botStyle,
       });
       onJoin(roomId);
     } catch (e) {
@@ -111,7 +116,7 @@ export function Lobby({ session, onJoin, onLogout }: { session: Session; onJoin:
           <Choice label="盲注" value={stake} options={STAKES.map((s, i) => [i, `${s[0]}/${s[1]}`])} onChange={setStake} />
           <label className="text-sm sm:col-span-2">
             <span className="mb-1 block text-white/70">
-              电脑玩家：{Math.min(bots, maxSeats - 1)} 个（初级）
+              电脑玩家：{Math.min(bots, maxSeats - 1)} 个
             </span>
             <input
               type="range"
@@ -122,6 +127,11 @@ export function Lobby({ session, onJoin, onLogout }: { session: Session; onJoin:
               className="w-full accent-emerald-400"
             />
           </label>
+          {bots > 0 && (
+            <div className="sm:col-span-2">
+              <LevelStyleFields level={botLevel} style={botStyle} onLevel={setBotLevel} onStyle={setBotStyle} />
+            </div>
+          )}
           <button
             disabled={busy || !name.trim()}
             className="rounded-lg bg-emerald-500 py-2.5 font-semibold text-emerald-950 disabled:opacity-40 sm:col-span-2"

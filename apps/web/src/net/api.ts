@@ -45,8 +45,8 @@ async function call<T>(path: string, init?: RequestInit & { token?: string }): P
 }
 
 export const api = {
-  loginAnon: (nickname: string) =>
-    call<Session>('/api/auth/anon', { method: 'POST', body: JSON.stringify({ nickname }) }),
+  loginNickname: (nickname: string) =>
+    call<Session>('/api/auth/nickname', { method: 'POST', body: JSON.stringify({ nickname }) }),
   listTables: () => call<TableListing[]>('/api/tables'),
   createTable: (token: string, opts: CreateTableOptions) =>
     call<{ roomId: string }>('/api/tables', { method: 'POST', body: JSON.stringify(opts), token }),
@@ -69,6 +69,8 @@ export interface CreateTableOptions {
   smallBlind: number;
   bigBlind: number;
   bots: number;
+  botLevel: 'beginner' | 'advanced';
+  botStyle: string;
 }
 
 /** Mirror of the server's TableView (apps/server/src/table/TableActor.ts). */
@@ -77,6 +79,8 @@ export interface SeatView {
   playerId: string;
   name: string;
   isBot: boolean;
+  botLevel?: string;
+  botStyle?: string;
   stack: number;
   sittingOut: boolean;
   connected: boolean;

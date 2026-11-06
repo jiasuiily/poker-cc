@@ -75,6 +75,9 @@ importers:
       '@colyseus/sdk':
         specifier: ^0.18.9
         version: 0.18.9(@colyseus/core@0.18.26)(typescript@7.0.2)
+      '@poker/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@poker/core':
         specifier: workspace:*
         version: link:../../packages/poker-core

@@ -12,7 +12,8 @@
     "@colyseus/sdk": "^0.18.9",
     "@poker/core": "workspace:*",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "@poker/ai": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.4",

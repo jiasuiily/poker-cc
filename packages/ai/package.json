@@ -5,6 +5,15 @@
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
-  "scripts": { "typecheck": "tsc -p . --noEmit" },
-  "dependencies": { "@poker/core": "workspace:*", "@poker/strategy": "workspace:*" }
+  "scripts": {
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "@poker/core": "workspace:*",
+    "@poker/strategy": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles": "./src/styles.ts"
+  }
 }

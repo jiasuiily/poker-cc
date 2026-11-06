@@ -10,8 +10,8 @@
     {
       "name": "web",
       "runtimeExecutable": "C:/Users/jiasu/AppData/Local/pnpm/bin/node.exe",
-      "runtimeArgs": ["apps/web/node_modules/vite/bin/vite.js", "apps/web", "--port", "5173", "--host"],
-      "port": 5173
+      "runtimeArgs": ["apps/web/node_modules/vite/bin/vite.js", "apps/web", "--port", "5174", "--strictPort", "--host"],
+      "port": 5174
     }
   ]
 }

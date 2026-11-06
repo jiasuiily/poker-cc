@@ -11,7 +11,7 @@ export function Login({ onLogin }: { onLogin: (s: Session) => void }) {
     setBusy(true);
     setErr(null);
     try {
-      onLogin(await api.loginAnon(name));
+      onLogin(await api.loginNickname(name));
     } catch (e) {
       setErr(e instanceof Error ? e.message : '登录失败');
     } finally {
@@ -23,7 +23,7 @@ export function Login({ onLogin }: { onLogin: (s: Session) => void }) {
     <div className="flex min-h-full items-center justify-center p-4">
       <form onSubmit={submit} className="w-full max-w-sm rounded-2xl bg-felt-dark p-6 shadow-xl ring-1 ring-white/10">
         <h1 className="mb-1 text-2xl font-bold">德州扑克</h1>
-        <p className="mb-6 text-sm text-white/60">家人朋友局 · 输入昵称开始</p>
+        <p className="mb-6 text-sm text-white/60">家人朋友局 · 同一昵称会进入同一个身份</p>
         <label className="mb-1 block text-sm text-white/70" htmlFor="nick">
           昵称
         </label>

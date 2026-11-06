@@ -22,6 +22,7 @@ export interface HandMeta {
   handId: string;
   tableName: string;
   bigBlind: number;
+  maxSeats: number;
   heroSeat: number;
   seats: Omit<SeatSnapshot, 'startStack'>[];
 }
@@ -134,7 +135,7 @@ export async function loadHandForPlayer(
   const seats = (h.seats as SeatSnapshot[]).map(({ startStack: _s, ...rest }) => rest);
   return {
     status: 'ok',
-    meta: { handId: h.id, tableName: h.tableName, bigBlind: h.bigBlind, heroSeat: me.seat, seats },
+    meta: { handId: h.id, tableName: h.tableName, bigBlind: h.bigBlind, maxSeats: h.maxSeats, heroSeat: me.seat, seats },
     events: h.events as HandEvent[],
     result: h.result as HandResult,
   };

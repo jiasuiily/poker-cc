@@ -1,4 +1,5 @@
-import type { PlayerView } from '@poker/core';
+import type { Card, PlayerView, ReplayFrame } from '@poker/core';
+import type { DecisionReport } from '@poker/strategy';
 
 export const SERVER_URL: string =
   import.meta.env.VITE_SERVER_URL ?? `${location.protocol}//${location.hostname}:2567`;
@@ -40,7 +41,7 @@ async function call<T>(path: string, init?: RequestInit & { token?: string }): P
     },
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error ?? `请求失败 (${res.status})`);
+  if (!res.ok) throw new HttpError(res.status, body.error ?? `请求失败 (${res.status})`);
   return body as T;
 }
 
@@ -50,7 +51,48 @@ export const api = {
   listTables: () => call<TableListing[]>('/api/tables'),
   createTable: (token: string, opts: CreateTableOptions) =>
     call<{ roomId: string }>('/api/tables', { method: 'POST', body: JSON.stringify(opts), token }),
+  listHands: (token: string, before?: string) =>
+    call<{ items: HandListItem[]; next: string | null }>(`/api/hands?limit=20${before ? `&before=${encodeURIComponent(before)}` : ''}`, { token }),
+  getHand: (token: string, id: string) => call<{ hand: HandMeta; frames: ReplayFrame[] }>(`/api/hands/${encodeURIComponent(id)}`, { token }),
+  requestAnalysis: (token: string, id: string) =>
+    call<AnalysisResponse>(`/api/hands/${encodeURIComponent(id)}/analysis`, { method: 'POST', token }),
+  getAnalysis: (token: string, id: string) => call<AnalysisResponse>(`/api/hands/${encodeURIComponent(id)}/analysis`, { token }),
 };
+
+export class HttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+export interface HandListItem {
+  handId: string;
+  tableName: string;
+  endedAt: string;
+  bigBlind: number;
+  seat: number;
+  holeCards: Card[];
+  board: Card[];
+  net: number;
+  analyzed: boolean;
+}
+
+export interface HandMeta {
+  handId: string;
+  tableName: string;
+  bigBlind: number;
+  maxSeats: number;
+  heroSeat: number;
+  seats: { seat: number; playerId: string; name: string; isBot: boolean; botLevel?: string; botStyle?: string }[];
+}
+
+export type LlmStatus = 'pending' | 'ok' | 'failed' | 'disabled' | 'limited';
+
+export interface AnalysisResponse {
+  decisions: DecisionReport[];
+  llmStatus: LlmStatus;
+  llmText: string | null;
+}
 
 export interface TableListing {
   roomId: string;

@@ -82,7 +82,7 @@ export function TablePage({ roomId, session, onExit, onAuthExpired }: Props) {
       {error && <div className="mx-auto mt-2 rounded-lg bg-red-900/80 px-3 py-1.5 text-sm">{error}</div>}
 
       <div className="mt-auto pt-3">
-        {hand?.street === 'complete' && <ResultBanner hand={hand} seats={view.seats} />}
+        {hand?.street === 'complete' && <ResultBanner hand={hand} seats={view.seats} canReview={hand.viewerSeat !== null} />}
         {myTurn && hand ? (
           <ActionBar hand={hand} onAct={act} />
         ) : (
@@ -129,7 +129,7 @@ function SmallBtn(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return <button {...props} className="rounded-lg bg-white/10 px-3 py-2 ring-1 ring-white/15 active:bg-white/20" />;
 }
 
-function ResultBanner({ hand, seats }: { hand: PlayerView; seats: (SeatView | null)[] }) {
+function ResultBanner({ hand, seats, canReview }: { hand: PlayerView; seats: (SeatView | null)[]; canReview: boolean }) {
   const r = hand.result!;
   const nameOf = (seat: number) => seats[seat]?.name ?? `座位${seat + 1}`;
   const lines = r.pots.flatMap((p, i) =>
@@ -140,5 +140,14 @@ function ResultBanner({ hand, seats }: { hand: PlayerView; seats: (SeatView | nu
       return `${nameOf(w.seat)} 赢得${potName} ${w.amount}${what}`;
     }),
   );
-  return <div className="mb-2 rounded-lg bg-black/40 px-3 py-2 text-center text-sm text-amber-100">{lines.join(' · ')}</div>;
+  return (
+    <div className="mb-2 rounded-lg bg-black/40 px-3 py-2 text-center text-sm text-amber-100">
+      {lines.join(' · ')}
+      {canReview && (
+        <a href={`#/hand/${hand.handId}`} className="ml-2 whitespace-nowrap text-sky-300 underline">
+          在牌谱里查看
+        </a>
+      )}
+    </div>
+  );
 }

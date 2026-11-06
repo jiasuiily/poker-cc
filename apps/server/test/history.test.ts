@@ -66,6 +66,7 @@ describe('history repo', () => {
     const r = await getHandForPlayer(db, 't1-2', 'p0');
     if (r.status !== 'ok') throw new Error(r.status);
     expect(r.hand.heroSeat).toBe(0);
+    expect(r.hand.maxSeats).toBe(6);
     expect(r.hand.seats.map((s) => s.name)).toEqual(['玩家0', '玩家1', '玩家2']);
     const endIdx = r.frames.map((f) => f.kind).lastIndexOf('action');
     r.frames.forEach((f, i) => {

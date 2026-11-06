@@ -17,7 +17,8 @@ const MIGRATIONS = fileURLToPath(new URL('../../drizzle', import.meta.url));
 const DEFAULT_DATA_DIR = fileURLToPath(new URL('../../../../data/pglite', import.meta.url));
 
 /**
- * DATABASE_URL set → real PostgreSQL; otherwise PGlite on disk (or in memory for tests).
+ * DATABASE_URL set → real PostgreSQL; otherwise PGlite on disk (PGLITE_DIR, default data/pglite),
+ * or in memory for tests. PGlite allows one process per directory.
  * Runs migrations before returning.
  */
 export async function createDb(opts: { url?: string; dataDir?: string; memory?: boolean } = {}): Promise<Db> {
@@ -30,7 +31,7 @@ export async function createDb(opts: { url?: string; dataDir?: string; memory?: 
   let client: PGlite;
   if (opts.memory) client = new PGlite();
   else {
-    const dir = opts.dataDir ?? DEFAULT_DATA_DIR;
+    const dir = opts.dataDir ?? process.env.PGLITE_DIR ?? DEFAULT_DATA_DIR;
     mkdirSync(dir, { recursive: true }); // PGlite does not create missing parent directories
     client = new PGlite(dir);
   }

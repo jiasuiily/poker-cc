@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type Session, type TableListing } from '../net/api';
+import { History } from './History';
 import { LevelStyleFields, type BotLevelChoice, type BotStyleChoice } from './BotPicker';
 
 const STAKES = [
@@ -8,7 +9,16 @@ const STAKES = [
   [25, 50],
 ] as const;
 
-export function Lobby({ session, onJoin, onLogout }: { session: Session; onJoin: (roomId: string) => void; onLogout: () => void }) {
+interface LobbyProps {
+  session: Session;
+  tab: 'tables' | 'history';
+  onTab: (t: 'tables' | 'history') => void;
+  onJoin: (roomId: string) => void;
+  onOpenHand: (handId: string) => void;
+  onLogout: () => void;
+}
+
+export function Lobby({ session, tab, onTab, onJoin, onOpenHand, onLogout }: LobbyProps) {
   const [tables, setTables] = useState<TableListing[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [name, setName] = useState(`${session.name}的牌桌`);
@@ -69,6 +79,29 @@ export function Lobby({ session, onJoin, onLogout }: { session: Session; onJoin:
         </div>
       </header>
 
+      <div className="mb-5 flex gap-2" role="tablist">
+        {(
+          [
+            ['tables', '牌桌'],
+            ['history', '我的牌谱'],
+          ] as const
+        ).map(([t, label]) => (
+          <button
+            key={t}
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => onTab(t)}
+            className={`rounded-lg px-4 py-2 text-sm ring-1 ${tab === t ? 'bg-emerald-500/20 ring-emerald-400' : 'ring-white/15'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'history' ? (
+        <History session={session} onOpen={onOpenHand} onAuthExpired={onLogout} />
+      ) : (
+      <>
       <section className="mb-8">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/50">牌桌</h2>
         {err && <p className="mb-3 text-sm text-red-300">{err}</p>}
@@ -140,6 +173,8 @@ export function Lobby({ session, onJoin, onLogout }: { session: Session; onJoin:
           </button>
         </form>
       </section>
+      </>
+      )}
     </div>
   );
 }

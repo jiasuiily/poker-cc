@@ -94,6 +94,12 @@ importers:
 
   packages/poker-core: {}
 
+  packages/strategy:
+    dependencies:
+      '@poker/core':
+        specifier: workspace:*
+        version: link:../poker-core
+
 packages:
 
   '@better-auth/utils@0.3.1':

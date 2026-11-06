@@ -115,11 +115,12 @@ apps/web
 
 ### 5.1 接口（均需 `Authorization: Bearer <jwt>`）
 
-- `GET /api/hands?before=<ended_at ISO>&limit=20` → `[{handId, tableName, endedAt, bigBlind, seat, holeCards, board, net, analyzed}]`。
+- `GET /api/hands?before=<游标>&limit=20`（游标为 `"<ended_at ISO>|<hand_id>"`，响应带 `next`，避免结束时间相同的两手牌重复或遗漏） → `[{handId, tableName, endedAt, bigBlind, seat, holeCards, board, net, analyzed}]`。
   - `holeCards` 是请求者自己的底牌；`board` 是该手最终的公共牌。
 - `GET /api/hands/:id` → `{ hand: {tableName, bigBlind, seats(名字/是否电脑/难度/风格)}, frames: ReplayFrame[] }`。
   - 请求者不是参与者时返回 403。
-  - `ReplayFrame = { label: string, actor: number|null, view: PlayerView }`。服务端从 `events` 逐步 `reduce`，每个 Action 之后生成一帧；发新街时额外生成一帧（label 如「翻牌：K♠ 9♥ 5♣」）；第 0 帧是发完底牌、下完盲注的状态。
+  - `ReplayFrame` 是 `start` / `action`（带公开动作日志条目）/ `street`（带新发的公共牌）三种之一，每种都带 `view`。服务端从 `events` 逐步重放，每个 Action 之后生成一帧；发新街时额外生成一帧；第 0 帧是发完底牌、下完盲注的状态。说明文字（如「电脑2号 加注到 60」「翻牌：K♠ 9♥ 5♣」）由前端按座位名生成。
+  - 为此 `PlayerView` 增加公开的动作历史 `history`（谁在哪条街做了什么），高级 AI 也依赖它推断对手范围。
   - 每帧的 `view` 都是 `projectView(state, 请求者座位)`，与在牌桌上看到的一致。
 - `POST /api/hands/:id/analysis` → 返回（或计算并缓存）分析结果，见第 6、7 节。
 

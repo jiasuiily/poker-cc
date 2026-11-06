@@ -152,6 +152,24 @@ describe('TableActor', () => {
     expect(actor.viewFor(null).seats[0]).toMatchObject({ botLevel: 'beginner', botStyle: 'nit' });
   });
 
+  it('a player who takes a just-vacated seat does not see the previous occupant’s cards', () => {
+    const { actor, clock } = makeTable({ betweenHandsMs: 60_000, botThinkMs: [0, 0] });
+    actor.sit('alice', 'Alice', 0);
+    actor.addBot(1, 'beginner', 'tag');
+    actor.addBot(2, 'beginner', 'tag');
+    clock.advance(500);
+    expect(actor.hand).not.toBeNull();
+    actor.stand('alice');
+    for (let i = 0; i < 200 && actor.hand!.street !== 'complete'; i++) clock.advance(50);
+    expect(actor.hand!.street).toBe('complete');
+    expect(actor.seats[0]).toBeNull();
+    const shown = new Set(actor.hand!.result!.shown.map((s) => s.seat));
+    actor.sit('bob', 'Bob', 0);
+    const v = actor.viewFor('bob').hand!;
+    expect(v.viewerSeat).toBeNull();
+    if (!shown.has(0)) expect(v.seats.find((s) => s.seat === 0)!.hole).toBeNull();
+  });
+
   it('a busted human is sat out until rebuy', () => {
     const { actor } = makeTable();
     actor.sit('alice', 'Alice', 0);

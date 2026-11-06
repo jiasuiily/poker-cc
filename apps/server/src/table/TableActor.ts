@@ -312,7 +312,8 @@ export class TableActor {
         };
       }),
       you: { playerId, seat },
-      hand: h ? projectView(h, seat !== null && h.players.some((p) => p.seat === seat) ? seat : null) : null,
+      // Viewer = the player dealt into this hand, matched by id (a newcomer in a vacated seat is a spectator).
+      hand: h ? projectView(h, playerId ? (this.handSeats.find((s) => s.playerId === playerId)?.seat ?? null) : null) : null,
       deadline: this.deadline,
       serverTime: this.deps.now(),
       handNo: this.handNo,

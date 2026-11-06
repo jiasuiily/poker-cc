@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, HttpError, type HandListItem, type Session } from '../net/api';
+import { shouldAutoLoad } from '../paging';
 import { CardView } from './CardView';
 
 /** "我的牌谱": newest first, 20 at a time, loads more when the end comes into view. */
@@ -34,18 +35,25 @@ export function History({ session, onOpen, onAuthExpired }: { session: Session; 
 
   useEffect(() => {
     const el = sentinel.current;
-    if (!el || !next) return;
+    if (!el || !shouldAutoLoad({ next, loading, err })) return;
     const io = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting) && !loading) void load(next);
+      if (entries.some((e) => e.isIntersecting)) void load(next!);
     });
     io.observe(el);
     return () => io.disconnect();
-  }, [next, loading, load]);
+  }, [next, loading, err, load]);
 
   if (next === undefined && loading) return <p className="text-white/50">加载中…</p>;
   return (
     <div>
-      {err && <p className="mb-3 text-sm text-red-300">{err}</p>}
+      {err && (
+        <p className="mb-3 text-sm text-red-300">
+          {err}
+          <button onClick={() => void load(next ?? undefined)} className="ml-2 rounded px-2 py-0.5 text-white ring-1 ring-white/25">
+            重试
+          </button>
+        </p>
+      )}
       {items.length === 0 && !loading ? (
         <p className="text-white/50">还没有牌谱。坐下打几手，结束后就会出现在这里。</p>
       ) : (

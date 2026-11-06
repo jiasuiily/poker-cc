@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "server",
+      "runtimeExecutable": "C:/Users/jiasu/AppData/Local/pnpm/bin/node.exe",
+      "runtimeArgs": ["node_modules/tsx/dist/cli.mjs", "apps/server/src/index.ts"],
+      "port": 2567
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "C:/Users/jiasu/AppData/Local/pnpm/bin/node.exe",
+      "runtimeArgs": ["apps/web/node_modules/vite/bin/vite.js", "apps/web", "--port", "5173", "--host"],
+      "port": 5173
+    }
+  ]
+}

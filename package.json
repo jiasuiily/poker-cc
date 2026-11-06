@@ -1,0 +1,19 @@
+{
+  "name": "texas-holdem",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "pnpm -r typecheck",
+    "sim": "tsx packages/ai/scripts/sim.ts",
+    "dev:server": "pnpm --filter @poker/server dev",
+    "dev:web": "pnpm --filter @poker/web dev"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "fast-check": "^4.10.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

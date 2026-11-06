@@ -1,0 +1,23 @@
+{
+  "name": "@poker/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "@colyseus/core": "^0.18.26",
+    "@colyseus/schema": "^5.0.45",
+    "@colyseus/ws-transport": "^0.18.4",
+    "@poker/ai": "workspace:*",
+    "@poker/core": "workspace:*",
+    "express": "^5.3.0",
+    "jose": "^6.2.15"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6"
+  }
+}

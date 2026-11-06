@@ -116,13 +116,19 @@ export function evaluateDecision(
       const raiseTo = la.raise
         ? Math.max(la.raise.min, Math.min(la.raise.max, Math.round(sit.kind === 'rfi' ? 2.5 * view.bigBlind : sit.kind === 'vsOpen' ? 3 * view.currentBet : 2.2 * view.currentBet)))
         : null;
+      // When re-raising is impossible (facing an all-in, or too short), calling takes the raise share.
+      const callFreq = f.call + (raiseTo === null ? f.raise : 0);
       const options: OptionScore[] = [];
       if (la.canFold) options.push({ action: { kind: 'fold' }, freq: f.fold });
-      else if (la.canCheck) options.push({ action: { kind: 'check' }, freq: f.fold + f.call });
-      if (la.canCall) options.push({ action: { kind: 'call' }, freq: f.call });
+      else if (la.canCheck) options.push({ action: { kind: 'check' }, freq: f.fold + callFreq });
+      if (la.canCall) options.push({ action: { kind: 'call' }, freq: callFreq });
       if (raiseTo !== null) options.push({ action: { kind: 'raise', to: raiseTo }, freq: f.raise });
       const heroFreq = options.find((o) => o.action.kind === heroAction.kind)?.freq ?? 0;
-      const best = options.reduce((a, b) => ((b.freq ?? 0) > (a.freq ?? 0) ? b : a));
+      // Highest frequency wins; ties go to the non-fold option.
+      const best = options.reduce((a, b) => {
+        const d = (b.freq ?? 0) - (a.freq ?? 0);
+        return d > 0 || (d === 0 && a.action.kind === 'fold') ? b : a;
+      });
       const verdict = heroFreq >= 0.3 ? 'good' : heroFreq >= 0.05 ? 'ok' : 'mistake';
       const pos = positionsOf(view).get(me.seat);
       const spot = sit.kind === 'rfi' ? '无人入池' : sit.kind === 'vsOpen' ? `面对 ${sit.opener} 开池` : '面对再加注';

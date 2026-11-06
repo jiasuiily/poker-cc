@@ -84,15 +84,18 @@ function preflopRange(view: PlayerView, seat: number): Range {
   const pre = view.history.filter((e) => e.street === 'preflop');
   let last: ActionLogEntry | null = null;
   let sit: PreflopSituation = { kind: 'other' };
+  let raisesBefore = 0;
   for (let i = 0; i < pre.length; i++) {
     if (pre[i]!.seat !== seat) continue;
     last = pre[i]!;
     sit = preflopSituation({ ...view, history: pre.slice(0, i) }, seat);
+    raisesBefore = pre.slice(0, i).filter((e) => e.kind === 'raise').length;
   }
   if (!last || last.kind === 'check') return ANY_RANGE; // BB option / no voluntary action
   const chart = chartFor(tableFormat(view.seats.length), sit);
   if (last.kind === 'raise' || last.kind === 'bet') return chart?.raise.size ? chart.raise : STRONG_RANGE;
-  if (last.kind === 'call') return chart?.call.size ? chart.call : LIMP_RANGE;
+  // Calling a 3-bet or 4-bet without a chart: a strong range, never the limp range.
+  if (last.kind === 'call') return chart?.call.size ? chart.call : raisesBefore >= 2 ? STRONG_RANGE : LIMP_RANGE;
   return ANY_RANGE;
 }
 

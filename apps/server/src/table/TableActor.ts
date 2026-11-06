@@ -11,7 +11,7 @@ import {
   type PlayerView,
   type RandomInt,
 } from '@poker/core';
-import { getBot, thinkTimeMs, type BotLevel } from '@poker/ai';
+import { getBot, isStyleId, randomStyle, thinkTimeMs, type BotLevel, type StyleId } from '@poker/ai';
 
 export interface TableConfig {
   tableId: string;
@@ -45,6 +45,7 @@ export interface Occupant {
   name: string;
   isBot: boolean;
   botLevel?: BotLevel;
+  botStyle?: StyleId;
   stack: number;
   sittingOut: boolean;
   connected: boolean;
@@ -57,10 +58,35 @@ export interface SeatView {
   playerId: string;
   name: string;
   isBot: boolean;
+  botLevel?: BotLevel;
+  botStyle?: StyleId;
   stack: number;
   sittingOut: boolean;
   connected: boolean;
   inHand: boolean;
+}
+
+/** Who sat where at the start of a hand (stored with the hand history). */
+export interface SeatSnapshot {
+  seat: number;
+  playerId: string;
+  name: string;
+  isBot: boolean;
+  botLevel?: BotLevel;
+  botStyle?: StyleId;
+  startStack: number;
+}
+
+export interface HandCompleteRecord {
+  tableId: string;
+  tableName: string;
+  maxSeats: number;
+  handNo: number;
+  events: HandEvent[];
+  state: HandState;
+  seats: SeatSnapshot[];
+  startedAt: number;
+  endedAt: number;
 }
 
 /** Everything one client receives. Built per viewer; contains only what that viewer may see. */
@@ -83,8 +109,8 @@ export interface ActorDeps {
   setTimer: (fn: () => void, ms: number) => () => void;
   /** Called after every state change; the room re-broadcasts per-client views. */
   onChange: () => void;
-  /** Called with each completed hand's event log (persistence hook for phase 3). */
-  onHandComplete?: (events: HandEvent[], state: HandState) => void;
+  /** Called with each completed hand (persistence hook). Errors are logged, never break the table. */
+  onHandComplete?: (rec: HandCompleteRecord) => void;
   log?: (msg: string) => void;
 }
 
@@ -106,6 +132,8 @@ export class TableActor {
   version = 0;
   deadline: number | null = null;
   private button = -1;
+  private handSeats: SeatSnapshot[] = [];
+  private handStartedAt = 0;
   private turnTimer: (() => void) | null = null;
   private nextHandTimer: (() => void) | null = null;
   private botCounter = 0;
@@ -156,7 +184,9 @@ export class TableActor {
     });
   }
 
-  addBot(seat: number, level: BotLevel = 'beginner') {
+  addBot(seat: number, level: BotLevel = 'advanced', style: StyleId | 'random' = 'random') {
+    if (level !== 'beginner' && level !== 'advanced') throw new TableError('bad_level', '电脑难度无效');
+    if (style !== 'random' && !isStyleId(style)) throw new TableError('bad_style', '电脑风格无效');
     return this.exec(() => {
       this.assertSeat(seat);
       if (this.seats[seat]) throw new TableError('seat_taken', '这个座位已经有人了');
@@ -166,6 +196,7 @@ export class TableActor {
         name: `电脑${n}号`,
         isBot: true,
         botLevel: level,
+        botStyle: style === 'random' ? randomStyle(this.deps.rng) : style,
         stack: this.config.buyIn,
         sittingOut: false,
         connected: true,
@@ -273,6 +304,7 @@ export class TableActor {
           playerId: o.playerId,
           name: o.name,
           isBot: o.isBot,
+          ...(o.isBot ? { botLevel: o.botLevel, botStyle: o.botStyle } : {}),
           stack,
           sittingOut: o.sittingOut,
           connected: o.connected,
@@ -356,6 +388,18 @@ export class TableActor {
       deck: shuffleDeck(this.deps.randomInt),
     };
     this.events = [ev];
+    this.handStartedAt = this.deps.now();
+    this.handSeats = eligible.map((seat) => {
+      const o = this.seats[seat]!;
+      return {
+        seat,
+        playerId: o.playerId,
+        name: o.name,
+        isBot: o.isBot,
+        ...(o.isBot ? { botLevel: o.botLevel, botStyle: o.botStyle } : {}),
+        startStack: o.stack,
+      };
+    });
     this.hand = startHand(ev);
     this.afterStateChange();
   }
@@ -388,7 +432,21 @@ export class TableActor {
         const o = this.seats[f.seat];
         if (o && o.playerId === f.playerId) o.stack = f.stack;
       }
-      this.deps.onHandComplete?.(this.events, h);
+      try {
+        this.deps.onHandComplete?.({
+          tableId: this.config.tableId,
+          tableName: this.config.name,
+          maxSeats: this.config.maxSeats,
+          handNo: this.handNo,
+          events: this.events,
+          state: h,
+          seats: this.handSeats,
+          startedAt: this.handStartedAt,
+          endedAt: this.deps.now(),
+        });
+      } catch (e) {
+        this.deps.log?.(`hand-complete hook failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
       this.seats.forEach((o, i) => {
         if (!o) return;
         if (o.leaveAfterHand) this.seats[i] = null;
@@ -413,7 +471,7 @@ export class TableActor {
           const cur = this.hand;
           if (!cur || cur.handId !== handId || cur.actionSeq !== seq) return;
           const view = projectView(cur, seat);
-          const action = getBot(o.botLevel ?? 'beginner').decide(view, this.deps.rng);
+          const action = getBot(o.botLevel ?? 'beginner', o.botStyle ?? 'tag').decide(view, this.deps.rng);
           this.apply(seat, action);
         });
       }, max > 0 ? thinkTimeMs(this.deps.rng, min, max) : 0);

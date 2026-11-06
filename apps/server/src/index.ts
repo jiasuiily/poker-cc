@@ -4,6 +4,16 @@ import { WebSocketTransport } from '@colyseus/ws-transport';
 import { issueToken, verifyToken } from './auth.js';
 import { getDb } from './db/client.js';
 import { findOrCreatePlayer } from './players.js';
+import { getHandForPlayer, listHands } from './history/repo.js';
+
+/** Player id from the Authorization header, or null. */
+async function authed(req: express.Request): Promise<string | null> {
+  try {
+    return (await verifyToken(req.headers.authorization?.replace(/^Bearer /, ''))).playerId;
+  } catch {
+    return null;
+  }
+}
 import { TableRoom, type TableMetadata } from './rooms/TableRoom.js';
 
 const PORT = Number(process.env.PORT ?? 2567);
@@ -47,9 +57,26 @@ const gameServer = new Server({
       } catch {
         return void res.status(401).json({ error: '请先登录' });
       }
-      const { name, maxSeats, smallBlind, bigBlind, bots } = req.body ?? {};
-      const room = await matchMaker.createRoom('table', { name, maxSeats, smallBlind, bigBlind, bots });
+      const { name, maxSeats, smallBlind, bigBlind, bots, botLevel, botStyle } = req.body ?? {};
+      const room = await matchMaker.createRoom('table', { name, maxSeats, smallBlind, bigBlind, bots, botLevel, botStyle });
       res.json({ roomId: room.roomId });
+    });
+
+    app.get('/api/hands', async (req, res) => {
+      const me = await authed(req);
+      if (!me) return void res.status(401).json({ error: '请先登录' });
+      const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+      const before = typeof req.query.before === 'string' ? req.query.before : undefined;
+      res.json(await listHands(await getDb(), me, { before, limit }));
+    });
+
+    app.get('/api/hands/:id', async (req, res) => {
+      const me = await authed(req);
+      if (!me) return void res.status(401).json({ error: '请先登录' });
+      const r = await getHandForPlayer(await getDb(), req.params.id, me);
+      if (r.status === 'not_found') return void res.status(404).json({ error: '牌局不存在' });
+      if (r.status === 'forbidden') return void res.status(403).json({ error: '只能查看自己参与的牌局' });
+      res.json({ hand: r.hand, frames: r.frames });
     });
   },
 });

@@ -1,7 +1,10 @@
 import { randomInt as cryptoRandomInt } from 'node:crypto';
 import { Room, type Client } from '@colyseus/core';
 import type { PlayerAction } from '@poker/core';
+import type { BotLevel, StyleId } from '@poker/ai';
 import { verifyToken, type AuthUser } from '../auth.js';
+import { getDb } from '../db/client.js';
+import { saveHand } from '../history/repo.js';
 import { DEFAULT_TABLE_CONFIG, TableActor, TableError } from '../table/TableActor.js';
 
 export const PROTOCOL_VERSION = 1;
@@ -12,6 +15,21 @@ export interface TableRoomOptions {
   smallBlind?: number;
   bigBlind?: number;
   bots?: number;
+  botLevel?: BotLevel;
+  botStyle?: StyleId | 'random';
+}
+
+/** Save with up to 2 retries; failures are logged and never affect the table (spec 4.3). */
+async function persistHand(rec: Parameters<typeof saveHand>[1], log: (m: string) => void) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await saveHand(await getDb(), rec);
+      return;
+    } catch (e) {
+      if (attempt === 2) log(`failed to save hand ${rec.state.handId}: ${e instanceof Error ? e.message : String(e)}`);
+      else await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+    }
+  }
 }
 
 export interface TableMetadata {
@@ -70,10 +88,12 @@ export class TableRoom extends Room<{ metadata: TableMetadata; client: PokerClie
         },
         onChange: () => this.broadcastViews(),
         log: (m) => console.log(`[table ${this.roomId}] ${m}`),
+        onHandComplete: (rec) => void persistHand(rec, (m) => console.error(`[table ${this.roomId}] ${m}`)),
       },
     );
     const bots = clampInt(options.bots, 0, maxSeats - 1, 0);
-    for (let i = 0; i < bots; i++) this.actor.addBot(maxSeats - 1 - i);
+    const level = options.botLevel === 'beginner' ? 'beginner' : 'advanced';
+    for (let i = 0; i < bots; i++) this.actor.addBot(maxSeats - 1 - i, level, options.botStyle ?? 'random');
 
     this.onMessage('sit', (c: PokerClient, m: { seat: number }) => this.run(c, () => this.actor.sit(c.auth!.playerId, c.auth!.name, Number(m?.seat))));
     this.onMessage('stand', (c: PokerClient) => this.run(c, () => this.actor.stand(c.auth!.playerId)));
@@ -81,7 +101,9 @@ export class TableRoom extends Room<{ metadata: TableMetadata; client: PokerClie
     this.onMessage('sitOut', (c: PokerClient, m: { value: boolean }) =>
       this.run(c, () => this.actor.setSittingOut(c.auth!.playerId, !!m?.value)),
     );
-    this.onMessage('addBot', (c: PokerClient, m: { seat: number }) => this.run(c, () => this.actor.addBot(Number(m?.seat))));
+    this.onMessage('addBot', (c: PokerClient, m: { seat: number; level?: BotLevel; style?: StyleId | 'random' }) =>
+      this.run(c, () => this.actor.addBot(Number(m?.seat), m?.level ?? 'advanced', m?.style ?? 'random')),
+    );
     this.onMessage('removeBot', (c: PokerClient, m: { seat: number }) => this.run(c, () => this.actor.removeBot(Number(m?.seat))));
     this.onMessage('act', (c: PokerClient, m: { handId: string; seq: number; action: PlayerAction }) =>
       this.run(c, () => this.actor.act(c.auth!.playerId, String(m?.handId), Number(m?.seq), parseAction(m?.action))),

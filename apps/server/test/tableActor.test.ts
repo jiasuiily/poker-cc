@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { seededRandomInt } from '@poker/core';
-import { DEFAULT_TABLE_CONFIG, TableActor, TableError } from '../src/table/TableActor.js';
+import { DEFAULT_TABLE_CONFIG, TableActor, TableError, type HandCompleteRecord } from '../src/table/TableActor.js';
 
 /** Manual clock: timers fire only when advanced. */
 function fakeClock() {
@@ -32,7 +32,7 @@ function fakeClock() {
   };
 }
 
-function makeTable(overrides: Partial<typeof DEFAULT_TABLE_CONFIG> = {}) {
+function makeTable(overrides: Partial<typeof DEFAULT_TABLE_CONFIG> = {}, onRecord?: (rec: HandCompleteRecord) => void) {
   const clock = fakeClock();
   const rnd = seededRandomInt(7);
   let changes = 0;
@@ -45,7 +45,9 @@ function makeTable(overrides: Partial<typeof DEFAULT_TABLE_CONFIG> = {}) {
       now: clock.now,
       setTimer: clock.setTimer,
       onChange: () => changes++,
-      onHandComplete: (_ev, s) => {
+      onHandComplete: (rec) => {
+        onRecord?.(rec);
+        const s = rec.state;
         const start = s.players.reduce((a, p) => a + p.startStack, 0);
         const end = s.result!.finalStacks.reduce((a, f) => a + f.stack, 0);
         if (start !== end) throw new Error('chips not conserved');
@@ -119,6 +121,35 @@ describe('TableActor', () => {
     actor.stand('alice');
     clock.advance(60_000);
     expect(actor.seats[0]).toBeNull();
+  });
+
+  it('keeps dealing when the hand-complete hook throws', () => {
+    const { actor, clock } = makeTable({}, () => {
+      throw new Error('db down');
+    });
+    actor.addBot(0);
+    actor.addBot(1);
+    clock.advance(5 * 60_000);
+    expect(actor.handNo).toBeGreaterThan(3);
+  });
+
+  it('records bot level and style in the seat snapshot', () => {
+    const recs: HandCompleteRecord[] = [];
+    const { actor, clock } = makeTable({}, (r) => recs.push(r));
+    actor.addBot(0, 'beginner', 'nit');
+    actor.addBot(1, 'advanced', 'random');
+    clock.advance(60_000);
+    const rec = recs[0]!;
+    expect(rec.tableId).toBe('t1');
+    expect(rec.tableName).toBe('test');
+    expect(rec.handNo).toBe(1);
+    expect(rec.endedAt).toBeGreaterThanOrEqual(rec.startedAt);
+    const s0 = rec.seats.find((s) => s.seat === 0)!;
+    expect(s0).toMatchObject({ isBot: true, botLevel: 'beginner', botStyle: 'nit', startStack: 1000 });
+    const s1 = rec.seats.find((s) => s.seat === 1)!;
+    expect(s1.botLevel).toBe('advanced');
+    expect(['tag', 'lag', 'nit', 'station', 'maniac']).toContain(s1.botStyle);
+    expect(actor.viewFor(null).seats[0]).toMatchObject({ botLevel: 'beginner', botStyle: 'nit' });
   });
 
   it('a busted human is sat out until rebuy', () => {

@@ -9,7 +9,7 @@ describe('bot styles', () => {
     expect(BOT_STYLES.lag).toEqual({ id: 'lag', looseness: 1.5, aggression: 2.4, bluff: 1.4, stickiness: 1.0, sizing: 1.1 });
     expect(BOT_STYLES.nit).toEqual({ id: 'nit', looseness: 0.6, aggression: 0.8, bluff: 0.3, stickiness: 0.7, sizing: 0.9 });
     expect(BOT_STYLES.station).toEqual({ id: 'station', looseness: 1.8, aggression: 0.5, bluff: 0.4, stickiness: 1.8, sizing: 0.8 });
-    expect(BOT_STYLES.maniac).toEqual({ id: 'maniac', looseness: 2.6, aggression: 2.9, bluff: 2.5, stickiness: 1.2, sizing: 1.4 });
+    expect(BOT_STYLES.maniac).toEqual({ id: 'maniac', looseness: 2.6, aggression: 3.4, bluff: 2.5, stickiness: 1.2, sizing: 1.4 });
     expect(STYLE_NAMES).toEqual({ tag: '紧凶', lag: '松凶', nit: '岩石', station: '跟注站', maniac: '疯子' });
   });
 

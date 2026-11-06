@@ -22,7 +22,7 @@ export const BOT_STYLES: Record<StyleId, BotStyle> = {
   lag: { id: 'lag', looseness: 1.5, aggression: 2.4, bluff: 1.4, stickiness: 1.0, sizing: 1.1 },
   nit: { id: 'nit', looseness: 0.6, aggression: 0.8, bluff: 0.3, stickiness: 0.7, sizing: 0.9 },
   station: { id: 'station', looseness: 1.8, aggression: 0.5, bluff: 0.4, stickiness: 1.8, sizing: 0.8 },
-  maniac: { id: 'maniac', looseness: 2.6, aggression: 2.9, bluff: 2.5, stickiness: 1.2, sizing: 1.4 },
+  maniac: { id: 'maniac', looseness: 2.6, aggression: 3.4, bluff: 2.5, stickiness: 1.2, sizing: 1.4 },
 };
 
 export const STYLE_IDS = Object.keys(BOT_STYLES) as StyleId[];

@@ -1,4 +1,5 @@
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle as drizzlePglite } from 'drizzle-orm/pglite';
@@ -33,11 +34,57 @@ export async function createDb(opts: { url?: string; dataDir?: string; memory?: 
   else {
     const dir = opts.dataDir ?? process.env.PGLITE_DIR ?? DEFAULT_DATA_DIR;
     mkdirSync(dir, { recursive: true }); // PGlite does not create missing parent directories
+    acquireDirLock(dir);
     client = new PGlite(dir);
   }
   const db = drizzlePglite(client, { schema });
   await migratePglite(db, { migrationsFolder: MIGRATIONS });
   return db as unknown as Db;
+}
+
+/** File inside a PGlite data directory recording which process has it open. */
+export const LOCK_FILE = '.server.lock';
+
+const heldLocks = new Set<string>();
+let exitHookInstalled = false;
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0); // signal 0: existence check only
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+/**
+ * PGlite has no cross-process locking: two processes on one directory corrupt it.
+ * Refuse to start when another live process holds the directory; take over stale locks.
+ */
+function acquireDirLock(dir: string): void {
+  const file = join(dir, LOCK_FILE);
+  if (existsSync(file)) {
+    const pid = Number(readFileSync(file, 'utf8').trim());
+    if (Number.isInteger(pid) && pid > 0 && pid !== process.pid && isAlive(pid)) {
+      throw new Error(
+        `数据库目录 ${dir} 正被进程 ${pid} 使用。PGlite 同一时间只能被一个进程打开：先关闭那个服务，或用 PGLITE_DIR 换一个目录。`,
+      );
+    }
+  }
+  writeFileSync(file, String(process.pid));
+  heldLocks.add(file);
+  if (!exitHookInstalled) {
+    exitHookInstalled = true;
+    process.once('exit', () => {
+      for (const f of heldLocks) {
+        try {
+          if (readFileSync(f, 'utf8').trim() === String(process.pid)) unlinkSync(f);
+        } catch {
+          /* already gone */
+        }
+      }
+    });
+  }
 }
 
 let shared: Promise<Db> | null = null;

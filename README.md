@@ -31,7 +31,18 @@ pnpm dev:server
 pnpm dev:web
 ```
 
-浏览器打开 http://localhost:5173 。同一个昵称会进入同一个身份；牌谱存在 `data/pglite`，重启后仍在。
+浏览器打开 http://localhost:5174 。同一个昵称会进入同一个身份；牌谱存在 `data/pglite`，重启后仍在。
+
+### 端口与数据目录（和其他项目同时运行时）
+
+每个运行中的实例独占一组端口和一个数据目录。PGlite 同一时间只能被一个进程打开：服务启动时会在数据目录里写 `.server.lock`，如果目录正被另一个活着的进程使用，就直接报错退出，而不会把数据库写坏。
+
+| 实例 | 服务端（游戏 + 接口） | 前端 | 数据目录 |
+|---|---|---|---|
+| 手动测试（`pnpm dev:server` / `pnpm dev:web`） | 2567 | 5174（固定，被占即报错） | `data/pglite` |
+| Agent 预览（`.claude/launch.json`） | 2575 | 5175 | `data/pglite-preview` |
+
+另开实例时用环境变量换端口和目录：`PORT`、`PGLITE_DIR`（服务端），`VITE_SERVER_URL`（前端）。
 
 ## 测试与模拟
 

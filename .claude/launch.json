@@ -22,11 +22,11 @@
         "apps/web/node_modules/vite/bin/vite.js",
         "apps/web",
         "--port",
-        "5174",
+        "5175",
         "--strictPort",
         "--host"
       ],
-      "port": 5174,
+      "port": 5175,
       "env": {
         "VITE_SERVER_URL": "http://localhost:2575"
       },

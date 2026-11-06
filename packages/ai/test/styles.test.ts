@@ -3,12 +3,13 @@ import { seededRandomInt } from '@poker/core';
 import { BOT_STYLES, STYLE_NAMES, collectStats, getBot, makeBeginnerBot, randomStyle, simulate, type SeatStats, type StyleId } from '../src/index.js';
 
 describe('bot styles', () => {
-  it('presets match the spec table', () => {
+  // Spec 8.1 values tuned by simulation (lag aggression/looseness, nit aggression, station and maniac looseness, maniac aggression).
+  it('presets hold the tuned values', () => {
     expect(BOT_STYLES.tag).toEqual({ id: 'tag', looseness: 0.9, aggression: 1.3, bluff: 1.0, stickiness: 0.9, sizing: 1.0 });
-    expect(BOT_STYLES.lag).toEqual({ id: 'lag', looseness: 1.4, aggression: 1.5, bluff: 1.4, stickiness: 1.0, sizing: 1.1 });
-    expect(BOT_STYLES.nit).toEqual({ id: 'nit', looseness: 0.6, aggression: 0.7, bluff: 0.3, stickiness: 0.7, sizing: 0.9 });
-    expect(BOT_STYLES.station).toEqual({ id: 'station', looseness: 1.5, aggression: 0.5, bluff: 0.4, stickiness: 1.8, sizing: 0.8 });
-    expect(BOT_STYLES.maniac).toEqual({ id: 'maniac', looseness: 2.0, aggression: 2.2, bluff: 2.5, stickiness: 1.2, sizing: 1.4 });
+    expect(BOT_STYLES.lag).toEqual({ id: 'lag', looseness: 1.5, aggression: 2.4, bluff: 1.4, stickiness: 1.0, sizing: 1.1 });
+    expect(BOT_STYLES.nit).toEqual({ id: 'nit', looseness: 0.6, aggression: 0.8, bluff: 0.3, stickiness: 0.7, sizing: 0.9 });
+    expect(BOT_STYLES.station).toEqual({ id: 'station', looseness: 1.8, aggression: 0.5, bluff: 0.4, stickiness: 1.8, sizing: 0.8 });
+    expect(BOT_STYLES.maniac).toEqual({ id: 'maniac', looseness: 2.6, aggression: 2.9, bluff: 2.5, stickiness: 1.2, sizing: 1.4 });
     expect(STYLE_NAMES).toEqual({ tag: '紧凶', lag: '松凶', nit: '岩石', station: '跟注站', maniac: '疯子' });
   });
 

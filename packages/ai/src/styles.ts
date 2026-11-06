@@ -19,10 +19,10 @@ export interface BotStyle {
 /** Initial values from the spec (section 8.1); tuned against simulated VPIP/PFR. */
 export const BOT_STYLES: Record<StyleId, BotStyle> = {
   tag: { id: 'tag', looseness: 0.9, aggression: 1.3, bluff: 1.0, stickiness: 0.9, sizing: 1.0 },
-  lag: { id: 'lag', looseness: 1.4, aggression: 1.5, bluff: 1.4, stickiness: 1.0, sizing: 1.1 },
-  nit: { id: 'nit', looseness: 0.6, aggression: 0.7, bluff: 0.3, stickiness: 0.7, sizing: 0.9 },
-  station: { id: 'station', looseness: 1.5, aggression: 0.5, bluff: 0.4, stickiness: 1.8, sizing: 0.8 },
-  maniac: { id: 'maniac', looseness: 2.0, aggression: 2.2, bluff: 2.5, stickiness: 1.2, sizing: 1.4 },
+  lag: { id: 'lag', looseness: 1.5, aggression: 2.4, bluff: 1.4, stickiness: 1.0, sizing: 1.1 },
+  nit: { id: 'nit', looseness: 0.6, aggression: 0.8, bluff: 0.3, stickiness: 0.7, sizing: 0.9 },
+  station: { id: 'station', looseness: 1.8, aggression: 0.5, bluff: 0.4, stickiness: 1.8, sizing: 0.8 },
+  maniac: { id: 'maniac', looseness: 2.6, aggression: 2.9, bluff: 2.5, stickiness: 1.2, sizing: 1.4 },
 };
 
 export const STYLE_IDS = Object.keys(BOT_STYLES) as StyleId[];

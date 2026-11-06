@@ -37,6 +37,17 @@ export type HandEvent =
     }
   | { type: 'Action'; seat: number; seq: number; action: PlayerAction };
 
+/** Public record of one player action (visible to everyone, used for replays and range inference). */
+export interface ActionLogEntry {
+  seq: number;
+  seat: number;
+  street: Exclude<Street, 'complete'>;
+  kind: 'fold' | 'check' | 'call' | 'bet' | 'raise';
+  /** The player's total commitment on this street after the action. */
+  to: number;
+  allIn: boolean;
+}
+
 export interface PlayerState {
   seat: number;
   playerId: string;
@@ -101,6 +112,8 @@ export interface HandState {
   actionSeq: number;
   /** Remaining streets were dealt with no betting possible. */
   runout: boolean;
+  /** Public action log. */
+  log: ActionLogEntry[];
   result: HandResult | null;
 }
 

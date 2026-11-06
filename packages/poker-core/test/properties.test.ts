@@ -1,6 +1,7 @@
 import { describe, it } from 'vitest';
 import fc from 'fast-check';
 import {
+  buildReplayFrames,
   legalActions,
   projectView,
   reduce,
@@ -102,6 +103,27 @@ describe('property: random hands', () => {
         if (JSON.stringify(replayed) !== JSON.stringify(state)) throw new Error('replay mismatch');
       }),
       { numRuns: 1000 },
+    );
+  });
+
+  it('replay frames never leak unshown hole cards', () => {
+    fc.assert(
+      fc.property(arbHand, ({ seed, stacks, button, bb }) => {
+        const { state, events } = playRandomHand(seed, stacks, button, bb);
+        const shown = new Set(state.result!.shown.map((h) => h.seat));
+        for (const viewer of [null, ...state.players.map((p) => p.seat)]) {
+          const frames = buildReplayFrames(events, viewer);
+          // Shown cards may appear from the hand-ending action onwards; unshown cards never.
+          const endIdx = frames.map((f) => f.kind).lastIndexOf('action');
+          frames.forEach((f, i) => {
+            for (const s of f.view.seats) {
+              if (s.hole === null || s.seat === viewer) continue;
+              if (i < endIdx || !shown.has(s.seat)) throw new Error(`leak: seat ${s.seat} visible to ${viewer} in frame ${i}`);
+            }
+          });
+        }
+      }),
+      { numRuns: 500 },
     );
   });
 });

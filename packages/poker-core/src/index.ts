@@ -5,3 +5,4 @@ export * from './types.js';
 export * from './hand.js';
 export * from './pots.js';
 export * from './view.js';
+export * from './replay.js';

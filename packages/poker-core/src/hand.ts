@@ -85,6 +85,7 @@ export function startHand(ev: Extract<HandEvent, { type: 'HandStarted' }>): Hand
     toAct: null,
     actionSeq: 0,
     runout: false,
+    log: [],
     result: null,
   };
 
@@ -146,6 +147,7 @@ export function applyAction(prev: HandState, seat: number, action: PlayerAction)
 
   const s = structuredClone(prev);
   const p = playerAt(s, seat);
+  const betBefore = s.currentBet;
   switch (action.kind) {
     case 'fold':
       if (!la.canFold) throw new IllegalActionError('Cannot fold when check is available');
@@ -180,6 +182,14 @@ export function applyAction(prev: HandState, seat: number, action: PlayerAction)
   }
   p.acted = true;
   p.raiseLocked = true;
+  s.log.push({
+    seq: s.actionSeq,
+    seat,
+    street: s.street as Exclude<typeof s.street, 'complete'>,
+    kind: action.kind === 'raise' ? (betBefore === 0 ? 'bet' : 'raise') : action.kind,
+    to: p.committed,
+    allIn: p.allIn,
+  });
   s.actionSeq++;
   const idx = s.players.indexOf(p);
   advance(s, (idx + 1) % s.players.length);

@@ -1,6 +1,6 @@
 import type { Card } from './cards.js';
 import { legalActions, totalPot } from './hand.js';
-import type { HandResult, HandState, LegalActions, Street } from './types.js';
+import type { ActionLogEntry, HandResult, HandState, LegalActions, Street } from './types.js';
 
 export interface PlayerViewSeat {
   seat: number;
@@ -29,6 +29,8 @@ export interface PlayerView {
   toAct: number | null;
   actionSeq: number;
   seats: PlayerViewSeat[];
+  /** Public action history of this hand. */
+  history: ActionLogEntry[];
   /** Present only when it is the viewer's turn. */
   legal: LegalActions | null;
   result: HandResult | null;
@@ -66,6 +68,7 @@ export function projectView(s: HandState, viewerSeat: number | null): PlayerView
       hole:
         p.seat === viewerSeat ? ([...p.hole] as [Card, Card]) : shown.has(p.seat) ? ([...shown.get(p.seat)!] as [Card, Card]) : null,
     })),
+    history: s.log.map((e) => ({ ...e })),
     legal,
     result: s.result ? structuredClone(s.result) : null,
   };

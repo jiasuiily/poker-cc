@@ -44,6 +44,9 @@ importers:
       '@poker/core':
         specifier: workspace:*
         version: link:../../packages/poker-core
+      '@poker/strategy':
+        specifier: workspace:*
+        version: link:../../packages/strategy
       drizzle-orm:
         specifier: ^0.45.4
         version: 0.45.4(@electric-sql/pglite@0.5.15)(@types/pg@8.23.1)(pg@8.23.1)

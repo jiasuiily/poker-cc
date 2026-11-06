@@ -19,7 +19,8 @@
     "drizzle-orm": "^0.45.4",
     "express": "^5.3.0",
     "jose": "^6.2.15",
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "@poker/strategy": "workspace:*"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

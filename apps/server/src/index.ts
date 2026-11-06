@@ -4,7 +4,12 @@ import { WebSocketTransport } from '@colyseus/ws-transport';
 import { issueToken, verifyToken } from './auth.js';
 import { getDb } from './db/client.js';
 import { findOrCreatePlayer } from './players.js';
-import { getHandForPlayer, listHands } from './history/repo.js';
+import { getHandForPlayer, listHands, loadHandForPlayer } from './history/repo.js';
+import { getAnalysis, requestAnalysis } from './analysis/service.js';
+import { createLlmClient } from './llm.js';
+
+const llm = createLlmClient(process.env);
+const LLM_DAILY_LIMIT = Math.max(0, Number(process.env.LLM_DAILY_LIMIT ?? 30) || 0);
 
 /** Player id from the Authorization header, or null. */
 async function authed(req: express.Request): Promise<string | null> {
@@ -77,6 +82,27 @@ const gameServer = new Server({
       if (r.status === 'not_found') return void res.status(404).json({ error: '牌局不存在' });
       if (r.status === 'forbidden') return void res.status(403).json({ error: '只能查看自己参与的牌局' });
       res.json({ hand: r.hand, frames: r.frames });
+    });
+
+    app.post('/api/hands/:id/analysis', async (req, res) => {
+      const me = await authed(req);
+      if (!me) return void res.status(401).json({ error: '请先登录' });
+      const r = await requestAnalysis(await getDb(), llm, req.params.id, me, { dailyLimit: LLM_DAILY_LIMIT });
+      if (r.status === 'not_found') return void res.status(404).json({ error: '牌局不存在' });
+      if (r.status === 'forbidden') return void res.status(403).json({ error: '只能分析自己参与的牌局' });
+      res.json(r.analysis);
+    });
+
+    app.get('/api/hands/:id/analysis', async (req, res) => {
+      const me = await authed(req);
+      if (!me) return void res.status(401).json({ error: '请先登录' });
+      const db = await getDb();
+      const h = await loadHandForPlayer(db, req.params.id, me);
+      if (h.status === 'not_found') return void res.status(404).json({ error: '牌局不存在' });
+      if (h.status === 'forbidden') return void res.status(403).json({ error: '只能查看自己参与的牌局' });
+      const a = await getAnalysis(db, req.params.id, me);
+      if (!a) return void res.status(404).json({ error: '还没有分析过' });
+      res.json(a);
     });
   },
 });

@@ -27,6 +27,8 @@ export interface SimResult {
   net: number[];
   /** big blinds won per 100 hands per bot index. */
   bbPer100: number[];
+  /** Net chips per seat per hand: perHandNet[seat][hand]. */
+  perHandNet: number[][];
 }
 
 /**
@@ -36,6 +38,7 @@ export interface SimResult {
 export function simulate(o: SimOptions): SimResult {
   const n = o.bots.length;
   const net = new Array(n).fill(0) as number[];
+  const perHandNet: number[][] = Array.from({ length: n }, () => []);
   let button = 0;
   for (let h = 0; h < o.hands; h++) {
     const start: HandEvent = {
@@ -55,9 +58,12 @@ export function simulate(o: SimOptions): SimResult {
       events.push({ type: 'Action', seat, seq: s.actionSeq, action });
       s = applyAction(s, seat, action);
     }
-    for (const f of s.result!.finalStacks) net[f.seat]! += f.stack - o.startingStack;
+    for (const f of s.result!.finalStacks) {
+      net[f.seat]! += f.stack - o.startingStack;
+      perHandNet[f.seat]!.push(f.stack - o.startingStack);
+    }
     o.onHand?.(s, events);
     button = (button + 1) % n;
   }
-  return { hands: o.hands, net, bbPer100: net.map((x) => (x / o.bigBlind / o.hands) * 100) };
+  return { hands: o.hands, net, bbPer100: net.map((x) => (x / o.bigBlind / o.hands) * 100), perHandNet };
 }

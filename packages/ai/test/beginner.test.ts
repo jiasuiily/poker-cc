@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseCards, seededRandomInt, type Card } from '@poker/core';
-import { beginnerBot, preflopStrength, simulate } from '../src/index.js';
+import { BOT_STYLES, makeBeginnerBot, preflopStrength, simulate } from '../src/index.js';
 
 const hole = (s: string) => parseCards(s) as [Card, Card];
 
@@ -16,7 +16,7 @@ describe('beginner bot', () => {
     const rng = () => randomInt(1_000_000) / 1_000_000;
     let handsSeen = 0;
     const res = simulate({
-      bots: new Array(6).fill(beginnerBot),
+      bots: new Array(6).fill(makeBeginnerBot(BOT_STYLES.lag)),
       hands: 5000,
       startingStack: 1000,
       smallBlind: 5,

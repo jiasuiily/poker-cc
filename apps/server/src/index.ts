@@ -1,7 +1,9 @@
 import express from 'express';
 import { Server, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
-import { issueAnonToken, verifyToken } from './auth.js';
+import { issueToken, verifyToken } from './auth.js';
+import { getDb } from './db/client.js';
+import { findOrCreatePlayer } from './players.js';
 import { TableRoom, type TableMetadata } from './rooms/TableRoom.js';
 
 const PORT = Number(process.env.PORT ?? 2567);
@@ -21,10 +23,12 @@ const gameServer = new Server({
 
     app.get('/api/health', (_req, res) => void res.json({ ok: true }));
 
-    app.post('/api/auth/anon', async (req, res) => {
+    // Nickname login: the same nickname always maps to the same player (spec 4.4).
+    app.post('/api/auth/nickname', async (req, res) => {
       try {
-        const { token, user } = await issueAnonToken(req.body?.nickname);
-        res.json({ token, ...user });
+        const p = await findOrCreatePlayer(await getDb(), req.body?.nickname);
+        const user = { playerId: p.id, name: p.nickname };
+        res.json({ token: await issueToken(user), ...user });
       } catch (e) {
         res.status(400).json({ error: e instanceof Error ? e.message : 'bad request' });
       }
@@ -52,5 +56,6 @@ const gameServer = new Server({
 
 gameServer.define('table', TableRoom);
 
+await getDb(); // run migrations before accepting connections
 await gameServer.listen(PORT);
 console.log(`poker server listening on :${PORT}`);

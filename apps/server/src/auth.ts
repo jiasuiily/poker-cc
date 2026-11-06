@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { SignJWT, jwtVerify } from 'jose';
 
 const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? 'dev-only-secret-change-me');
@@ -11,19 +10,14 @@ export interface AuthUser {
   name: string;
 }
 
-/** Phase 2: anonymous login with a nickname. Phase 3 replaces this with username + password + invite code. */
-export async function issueAnonToken(nickname: unknown): Promise<{ token: string; user: AuthUser }> {
-  const name = sanitizeName(nickname);
-  // playerId is always server-generated: ids are visible to other players,
-  // so accepting one from the client would allow impersonation.
-  const user: AuthUser = { playerId: `anon-${randomUUID()}`, name };
-  const token = await new SignJWT({ name: user.name })
+/** Sign a 7-day token for a player (the id always comes from the players table). */
+export async function issueToken(user: AuthUser): Promise<string> {
+  return new SignJWT({ name: user.name })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(user.playerId)
     .setIssuedAt()
     .setExpirationTime('7d')
     .sign(secret);
-  return { token, user };
 }
 
 export async function verifyToken(token: unknown): Promise<AuthUser> {
@@ -33,8 +27,10 @@ export async function verifyToken(token: unknown): Promise<AuthUser> {
   return { playerId: payload.sub, name: payload.name };
 }
 
+/** Trimmed, 1–16 characters, no control characters or angle brackets. Rejects rather than truncates. */
 export function sanitizeName(raw: unknown): string {
-  const s = String(raw ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 16);
+  const s = String(raw ?? '').replace(/[\u0000-\u001f<>]/g, '').trim();
   if (!s) throw new Error('昵称不能为空');
+  if ([...s].length > 16) throw new Error('昵称最多 16 个字');
   return s;
 }

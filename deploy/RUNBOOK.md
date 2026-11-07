@@ -190,6 +190,8 @@ cd /opt/poker-cc && git pull && cd deploy && docker compose up -d --build
 
 数据库结构的升级会在 app 启动时自动执行。更新前建议先手动备份一次（`./backup.sh`）。
 
+升级到「一键分析 / 整体分析 / 管理员玩家统计」这一版之前，必须先执行 `deploy/backup.sh`：迁移 0003 修改了 `llm_usage` 的主键，若之后只回滚镜像而不恢复备份，单手解说会出错。
+
 `docker compose stop` 或更新时，服务端会先等正在保存的牌谱写完再退出，最多等 30 秒。正在打的那一手不会保存。
 
 ## 10. 常见问题

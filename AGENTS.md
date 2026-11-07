@@ -27,6 +27,8 @@
 | M3 | 自动分析 + 个人中心（红黄绿统计、趋势）+ 大模型水平评估 | 未开始 |
 | M4 | 钱包 / 托管 / 自助补码 / 现金局规则 + 牌局可靠性 | 未开始 |
 | M5 | Sit & Go 锦标赛 + 死按钮 + 大盲前注 | 未开始 |
+| 房主 | 房主开始 / 暂停、增删座位、永久邀请码 | 完成 |
+| 复盘+ | 个人复盘（「我的」页：统计 / 趋势 / 一键分析 / 整体评估）+ 管理页「玩家」统计 | 完成（feat/player-review，待合并） |
 
 本轮总方案（M1–M5）见 `docs/superpowers/plans/2026-11-07-phase3-accounts-wallet-tournament-deploy.md`：顺序 M1→M2→M3→M4→M5，同时修掉上一轮 23 个暂缓小问题。顶级 AI、PWA 等仍在更后面的阶段。
 
@@ -35,21 +37,21 @@
 | 路径 | 职责 |
 |---|---|
 | `packages/poker-core` | 纯函数引擎。一手牌 = `HandStarted`（含牌序）+ `Action[]`，`reduce` 可重放；`projectView(state, seat)` 是**唯一**对外视图投影（真人、观战、AI 同用，不含他人未亮底牌和牌序）；`buildReplayFrames` 生成回放帧；`log` / `PlayerView.history` 是公开动作日志 |
-| `packages/strategy` | 起手牌类别与范围解析、位置、近似 GTO 翻前表、`equityVsRanges`、`inferRanges`、`scoreOptions` / `evaluateDecision` / `analyzeHand`。纯计算无 IO |
+| `packages/strategy` | 起手牌类别与范围解析、位置、近似 GTO 翻前表、`equityVsRanges`、`inferRanges`、`scoreOptions` / `evaluateDecision` / `analyzeHand`；`summarizeDecisions` 汇总个人决策并做漏洞归类（`classifyLeak`）。纯计算无 IO |
 | `packages/ai` | `getBot(level, style)`、`makeBeginnerBot` / `makeAdvancedBot`、`BOT_STYLES`、`simulate`、`collectStats`；`@poker/ai/styles` 子路径给前端用（不把 strategy 打进浏览器） |
-| `apps/server` | Colyseus 0.18 只做房间 / 传输（**不用 Schema 共享状态**，每个客户端单独推送投影后的视图）；`TableActor` 每桌串行；`api/`（Express 路由，`mountApi(app, deps)` 依赖注入，可用内存库测试；`HttpError` + 统一错误处理）；`accounts/`（名字规则、注册登录、限流）；`db/`（Drizzle schema、PGlite / pg、迁移在 `drizzle/`）；`history/`、`analysis/`、`llm.ts`；`cli.ts`（管理员命令） |
+| `apps/server` | Colyseus 0.18 只做房间 / 传输（**不用 Schema 共享状态**，每个客户端单独推送投影后的视图）；`TableActor` 每桌串行；`api/`（Express 路由，`mountApi(app, deps)` 依赖注入，可用内存库测试；`HttpError` + 统一错误处理）；`accounts/`（名字规则、注册登录、限流）；`db/`（Drizzle schema、PGlite / pg、迁移在 `drizzle/`）；`history/`、`analysis/`（含 `batch.ts` 一键分析后台队列）、`stats/`（时长、玩家统计、管理汇总）、`coach/`（整体评估）、`llm.ts`；`accounts/activity.ts`（登录 / 在线）；`cli.ts`（管理员命令） |
 | `apps/web` | React 19 + Vite + Tailwind 4；`Felt` 牌桌组件（牌桌页和回放页共用）、`History`、`Replay`、`AnalysisPanel`、`BotPicker` |
 
-主要接口：`POST /api/auth/register|login|password`，`GET /api/me`，`/api/admin/*`（邀请码、用户、重置密码；仅管理员），`GET/POST /api/tables`，`GET /api/hands`（游标分页 `before=<endedAt>|<handId>`），`GET /api/hands/:id`（回放帧，非参与者 403），`POST/GET /api/hands/:id/analysis`。
+主要接口：`POST /api/auth/register|login|password`，`GET /api/me`，`/api/admin/*`（邀请码、用户、重置密码；仅管理员），`GET/POST /api/tables`，`GET /api/hands`（游标分页 `before=<endedAt>|<handId>`），`GET /api/hands/:id`（回放帧，非参与者 403），`POST/GET /api/hands/:id/analysis`；个人复盘 `GET /api/me/stats?range=`、`GET /api/me/trend?days=`、`POST/GET /api/me/analyze-all`、`POST/GET /api/me/reports`；管理页玩家统计 `GET /api/admin/players`、`GET /api/admin/players/:id/reports`。
 
 ## 运行与测试
 
 - Node 24（`pnpm env use --global 24`；Windows 上 pnpm 全局 bin `C:\Users\jiasu\AppData\Local\pnpm\bin` 需在 PATH，`pnpm setup` 后重开终端）。
-- `pnpm install` · `pnpm test`（约 165 项）· `pnpm test:perf`（两个计时测试，机器空闲时跑）· `pnpm typecheck` · `pnpm sim:ai`（AI 验收，约 10 分钟）。
-- 管理员命令：`pnpm --filter @poker/server admin create-admin <用户名> [显示名]` / `promote <用户名>` / `invite [数量] [有效天数]` / `reset-password <用户名>`（会打开 `PGLITE_DIR` 或 `DATABASE_URL` 指向的库，服务端在运行时用的是同一个库就会因目录锁被拒绝，先停服务或用 HTTP 管理页）。
+- `pnpm install` · `pnpm test`（约 225 项）· `pnpm test:perf`（两个计时测试，机器空闲时跑）· `pnpm typecheck` · `pnpm sim:ai`（AI 验收，约 10 分钟）。
+- 管理员命令：`pnpm --filter @poker/server admin create-admin <用户名> [显示名]` / `promote <用户名>` / `invite [数量] [有效天数]` / `invite-permanent <邀请码>` / `invite-revoke <邀请码>` / `reset-password <用户名>`（会打开 `PGLITE_DIR` 或 `DATABASE_URL` 指向的库，服务端在运行时用的是同一个库就会因目录锁被拒绝，先停服务或用 HTTP 管理页）。
 - 生产：`deploy/`（Dockerfile、docker-compose.yml、Caddyfile、backup.sh、RUNBOOK.md）。服务端用 `pnpm --filter @poker/server build` 打成 `apps/server/dist/{index,cli}.js`，生产时同源托管前端（`WEB_DIR`），迁移目录 `MIGRATIONS_DIR`。
 - 开发：`pnpm dev:server`（2567）+ `pnpm dev:web`（**5174，strictPort**），打开 http://localhost:5174 。
-- 环境变量：`PORT`、`JWT_SECRET`（上线必设）、`DATABASE_URL`、`PGLITE_DIR`、`LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` / `LLM_DAILY_LIMIT`；前端 `VITE_SERVER_URL`。
+- 环境变量：`PORT`、`JWT_SECRET`（上线必设）、`DATABASE_URL`、`PGLITE_DIR`、`LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` / `LLM_DAILY_LIMIT`、`LLM_BATCH_DAILY_LIMIT`（一键分析每人每日解说上限，默认 200）；前端 `VITE_SERVER_URL`。
 
 ### 端口与数据目录（本机常同时跑另一个项目 `D:\DSH\card`）
 

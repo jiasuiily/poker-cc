@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, MAX_SEATS, MIN_SEATS, type Session, type TableListing } from '../net/api';
 import { History } from './History';
+import { Me } from './me/Me';
 import { LevelStyleFields, type BotLevelChoice, type BotStyleChoice } from './BotPicker';
 
 const STATUS_TEXT: Record<string, string> = { waiting: '等待开始', running: '进行中', paused: '已暂停' };
@@ -13,8 +14,8 @@ const STAKES = [
 
 interface LobbyProps {
   session: Session;
-  tab: 'tables' | 'history';
-  onTab: (t: 'tables' | 'history') => void;
+  tab: 'tables' | 'history' | 'me';
+  onTab: (t: 'tables' | 'history' | 'me') => void;
   onJoin: (roomId: string) => void;
   onOpenHand: (handId: string) => void;
   onLogout: () => void;
@@ -94,6 +95,7 @@ export function Lobby({ session, tab, onTab, onJoin, onOpenHand, onLogout }: Lob
           [
             ['tables', '牌桌'],
             ['history', '我的牌谱'],
+            ['me', '我的'],
           ] as const
         ).map(([t, label]) => (
           <button
@@ -110,6 +112,8 @@ export function Lobby({ session, tab, onTab, onJoin, onOpenHand, onLogout }: Lob
 
       {tab === 'history' ? (
         <History session={session} onOpen={onOpenHand} onAuthExpired={onLogout} />
+      ) : tab === 'me' ? (
+        <Me session={session} onAuthExpired={onLogout} />
       ) : (
       <>
       <section className="mb-8">

@@ -1,4 +1,4 @@
-import type { Card, PlayerView, ReplayFrame } from '@poker/core';
+import type { Card, PlayerAction, PlayerView, ReplayFrame } from '@poker/core';
 import type { DecisionReport } from '@poker/strategy';
 
 /**
@@ -64,6 +64,14 @@ export const api = {
     call<Session>('/api/auth/register', { method: 'POST', body: JSON.stringify(input) }),
   changePassword: (token: string, oldPassword: string, newPassword: string) =>
     call<Session>('/api/auth/password', { method: 'POST', body: JSON.stringify({ oldPassword, newPassword }), token }),
+  me: {
+    stats: (token: string, range: StatsRange) => call<PlayerStats & { unanalyzed: number }>(`/api/me/stats?range=${range}`, { token }),
+    trend: (token: string, days = 30) => call<TrendDay[]>(`/api/me/trend?days=${days}`, { token }),
+    analyzeAll: (token: string) => call<BatchProgress>('/api/me/analyze-all', { method: 'POST', token }),
+    analyzeProgress: (token: string) => call<BatchProgress>('/api/me/analyze-all', { token }),
+    reports: (token: string) => call<CoachReport[]>('/api/me/reports', { token }),
+    createReport: (token: string) => call<CoachReport>('/api/me/reports', { method: 'POST', token }),
+  },
   admin: {
     invites: (token: string) => call<InviteRow[]>('/api/admin/invites', { token }),
     createInvites: (token: string, count: number, expiresInDays: number | null) =>
@@ -82,6 +90,62 @@ export const api = {
     call<AnalysisResponse>(`/api/hands/${encodeURIComponent(id)}/analysis`, { method: 'POST', token }),
   getAnalysis: (token: string, id: string) => call<AnalysisResponse>(`/api/hands/${encodeURIComponent(id)}/analysis`, { token }),
 };
+
+export type StatsRange = '7d' | '30d' | 'all';
+export type LeakKind = 'preflopLoose' | 'preflopTight' | 'callTooWide' | 'foldTooMuch' | 'passive' | 'aggressive' | 'sizing';
+export type DecisionStreet = 'preflop' | 'flop' | 'turn' | 'river';
+
+/** Mirror of packages/strategy/src/summary.ts. */
+export interface StatsExample {
+  handId: string;
+  street: DecisionStreet;
+  actionSeq: number;
+  heroAction: PlayerAction;
+  recommended: PlayerAction;
+  evLossBb: number;
+  reasons: string[];
+}
+
+export interface PlayerStats {
+  hands: number;
+  decisions: number;
+  good: number;
+  ok: number;
+  mistake: number;
+  evLossPerHand: number;
+  byStreet: Record<DecisionStreet, { decisions: number; mistakes: number }>;
+  leaks: { kind: LeakKind; count: number; evLossBb: number }[];
+  examples: StatsExample[];
+}
+
+/** Mirror of apps/server/src/stats/player.ts. */
+export interface TrendDay {
+  day: string;
+  hands: number;
+  good: number;
+  ok: number;
+  mistake: number;
+}
+
+/** Mirror of apps/server/src/analysis/batch.ts. */
+export interface BatchProgress {
+  running: boolean;
+  hands: number;
+  localDone: number;
+  llmDone: number;
+  llmQueued: number;
+  llmSkipped: number;
+  reason: 'limit' | 'disabled' | null;
+}
+
+/** Mirror of apps/server/src/coach/service.ts. */
+export interface CoachReport {
+  id: string;
+  createdAt: string;
+  status: 'pending' | 'ok' | 'failed';
+  stats: PlayerStats;
+  text: string | null;
+}
 
 export interface InviteRow {
   code: string;

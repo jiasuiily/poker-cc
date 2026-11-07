@@ -8,7 +8,7 @@ import { Account } from './components/Account';
 import { Admin } from './components/Admin';
 
 type Route =
-  | { kind: 'lobby'; tab: 'tables' | 'history' }
+  | { kind: 'lobby'; tab: 'tables' | 'history' | 'me' }
   | { kind: 'table'; id: string }
   | { kind: 'hand'; id: string }
   | { kind: 'account' }
@@ -21,7 +21,7 @@ function parseHash(): Route {
   if (h) return { kind: 'hand', id: h[1]! };
   if (location.hash === '#/account') return { kind: 'account' };
   if (location.hash === '#/admin') return { kind: 'admin' };
-  return { kind: 'lobby', tab: location.hash === '#/history' ? 'history' : 'tables' };
+  return { kind: 'lobby', tab: location.hash === '#/history' ? 'history' : location.hash === '#/me' ? 'me' : 'tables' };
 }
 
 export function App() {
@@ -63,7 +63,7 @@ export function App() {
     <Lobby
       session={session}
       tab={route.kind === 'lobby' ? route.tab : 'tables'}
-      onTab={(t) => (location.hash = t === 'history' ? '/history' : '')}
+      onTab={(t) => (location.hash = t === 'history' ? '/history' : t === 'me' ? '/me' : '')}
       onJoin={(id) => (location.hash = `/table/${id}`)}
       onOpenHand={(id) => (location.hash = `/hand/${id}`)}
       onLogout={logout}

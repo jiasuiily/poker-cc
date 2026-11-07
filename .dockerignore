@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+data
+.git
+.superpowers
+.claude
+deploy/.env
+deploy/backups
+docs/context
+*.docx
+*.log

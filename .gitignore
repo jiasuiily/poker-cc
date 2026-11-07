@@ -6,3 +6,4 @@ dist/
 ~$*.docx
 .superpowers/
 data/
+deploy/backups/

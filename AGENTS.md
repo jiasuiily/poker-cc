@@ -23,7 +23,7 @@
 | 2 | 单桌可玩闭环、匿名登录、初级 AI | 完成 |
 | 2+ | 牌谱记录 / 回放、近似 GTO 复盘 + 大模型解说、AI 难度 × 风格、昵称登录、PostgreSQL | 完成（2026-11-06 合并到 main） |
 | M1 | 账号与安全（注册 / 登录 / 改密码 / 邀请码 / 管理员页与命令 / 登录限流 / 令牌版本） | 完成 |
-| M2 | 正式部署（Docker + Caddy + PostgreSQL + 备份） | 未开始 |
+| M2 | 正式部署（Docker + Caddy + PostgreSQL + 备份；手册 `deploy/RUNBOOK.md`） | 代码完成，待在服务器上首次部署 |
 | M3 | 自动分析 + 个人中心（红黄绿统计、趋势）+ 大模型水平评估 | 未开始 |
 | M4 | 钱包 / 托管 / 自助补码 / 现金局规则 + 牌局可靠性 | 未开始 |
 | M5 | Sit & Go 锦标赛 + 死按钮 + 大盲前注 | 未开始 |
@@ -47,6 +47,7 @@
 - Node 24（`pnpm env use --global 24`；Windows 上 pnpm 全局 bin `C:\Users\jiasu\AppData\Local\pnpm\bin` 需在 PATH，`pnpm setup` 后重开终端）。
 - `pnpm install` · `pnpm test`（约 165 项）· `pnpm test:perf`（两个计时测试，机器空闲时跑）· `pnpm typecheck` · `pnpm sim:ai`（AI 验收，约 10 分钟）。
 - 管理员命令：`pnpm --filter @poker/server admin create-admin <用户名> [显示名]` / `promote <用户名>` / `invite [数量] [有效天数]` / `reset-password <用户名>`（会打开 `PGLITE_DIR` 或 `DATABASE_URL` 指向的库，服务端在运行时用的是同一个库就会因目录锁被拒绝，先停服务或用 HTTP 管理页）。
+- 生产：`deploy/`（Dockerfile、docker-compose.yml、Caddyfile、backup.sh、RUNBOOK.md）。服务端用 `pnpm --filter @poker/server build` 打成 `apps/server/dist/{index,cli}.js`，生产时同源托管前端（`WEB_DIR`），迁移目录 `MIGRATIONS_DIR`。
 - 开发：`pnpm dev:server`（2567）+ `pnpm dev:web`（**5174，strictPort**），打开 http://localhost:5174 。
 - 环境变量：`PORT`、`JWT_SECRET`（上线必设）、`DATABASE_URL`、`PGLITE_DIR`、`LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` / `LLM_DAILY_LIMIT`；前端 `VITE_SERVER_URL`。
 

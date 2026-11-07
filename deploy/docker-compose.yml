@@ -1,0 +1,59 @@
+# Run from the deploy/ directory:  docker compose up -d --build
+# Settings come from deploy/.env (copy .env.example and fill it in).
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://poker:${POSTGRES_PASSWORD}@db:5432/poker
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    # Time for the server to finish saving hands after `docker compose stop`.
+    stop_grace_period: 30s
+    logging:
+      options: { max-size: '10m', max-file: '5' }
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: poker
+      POSTGRES_DB: poker
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U poker -d poker']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    logging:
+      options: { max-size: '10m', max-file: '3' }
+
+  caddy:
+    image: caddy:2
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+    logging:
+      options: { max-size: '10m', max-file: '3' }
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

@@ -5,6 +5,7 @@ import type { BotLevel, StyleId } from '@poker/ai';
 import { verifyToken, type AuthUser } from '../auth.js';
 import { getDb } from '../db/client.js';
 import { saveHand } from '../history/repo.js';
+import { trackSave } from '../persistence.js';
 import { DEFAULT_TABLE_CONFIG, TableActor, TableError } from '../table/TableActor.js';
 
 export const PROTOCOL_VERSION = 1;
@@ -88,7 +89,7 @@ export class TableRoom extends Room<{ metadata: TableMetadata; client: PokerClie
         },
         onChange: () => this.broadcastViews(),
         log: (m) => console.log(`[table ${this.roomId}] ${m}`),
-        onHandComplete: (rec) => void persistHand(rec, (m) => console.error(`[table ${this.roomId}] ${m}`)),
+        onHandComplete: (rec) => void trackSave(persistHand(rec, (m) => console.error(`[table ${this.roomId}] ${m}`))),
       },
     );
     const bots = clampInt(options.bots, 0, maxSeats - 1, 0);

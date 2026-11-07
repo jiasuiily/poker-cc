@@ -13,7 +13,8 @@ import * as schema from './schema.js';
 /** Common query surface of the PGlite and node-postgres drivers. */
 export type Db = PgDatabase<PgQueryResultHKT, typeof schema>;
 
-const MIGRATIONS = fileURLToPath(new URL('../../drizzle', import.meta.url));
+/** Overridable for the bundled production build, which lives elsewhere. */
+const MIGRATIONS = process.env.MIGRATIONS_DIR ?? fileURLToPath(new URL('../../drizzle', import.meta.url));
 /** Repo-root data/pglite, regardless of the working directory. */
 const DEFAULT_DATA_DIR = fileURLToPath(new URL('../../../../data/pglite', import.meta.url));
 
@@ -93,4 +94,13 @@ let shared: Promise<Db> | null = null;
 export function getDb(): Promise<Db> {
   shared ??= createDb();
   return shared;
+}
+
+/** Close the process-wide database (graceful shutdown). */
+export async function closeDb(): Promise<void> {
+  if (!shared) return;
+  const db = (await shared) as unknown as { $client: { close?: () => Promise<void>; end?: () => Promise<void> } };
+  shared = null;
+  if (db.$client.end) await db.$client.end(); // pg Pool
+  else await db.$client.close?.(); // PGlite
 }

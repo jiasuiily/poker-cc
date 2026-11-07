@@ -1,4 +1,5 @@
 import express, { type Application } from 'express';
+import { sql } from 'drizzle-orm';
 import type { LoginLimiter } from '../accounts/rateLimit.js';
 import type { Db } from '../db/client.js';
 import { errorHandler } from '../http.js';
@@ -31,7 +32,15 @@ export function mountApi(app: Application, deps: ApiDeps): void {
   });
   app.use('/api', express.json({ limit: '16kb' }));
 
-  app.get('/api/health', (_req, res) => void res.json({ ok: true }));
+  // Container health check: also probes the database.
+  app.get('/api/health', async (_req, res) => {
+    try {
+      await (await deps.db()).execute(sql`select 1`);
+      res.json({ ok: true, db: true });
+    } catch {
+      res.status(503).json({ ok: false, db: false });
+    }
+  });
   app.use('/api/auth', authRoutes(deps));
   app.use('/api/me', meRoute(deps));
   app.use('/api/admin', adminRoutes(deps));

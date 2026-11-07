@@ -1,8 +1,13 @@
 import type { Card, PlayerView, ReplayFrame } from '@poker/core';
 import type { DecisionReport } from '@poker/strategy';
 
+/**
+ * Dev: the API runs on :2567 next to the Vite dev server. Production: the server serves the
+ * page itself, so API and WebSocket share the page's origin (behind Caddy / HTTPS).
+ */
 export const SERVER_URL: string =
-  import.meta.env.VITE_SERVER_URL ?? `${location.protocol}//${location.hostname}:2567`;
+  import.meta.env.VITE_SERVER_URL ??
+  (import.meta.env.DEV ? `${location.protocol}//${location.hostname}:2567` : location.origin);
 
 export const PROTOCOL_VERSION = 1;
 

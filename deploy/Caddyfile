@@ -1,0 +1,5 @@
+# Automatic HTTPS (Let's Encrypt) for $DOMAIN; WebSocket upgrades pass through reverse_proxy.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:2567
+}

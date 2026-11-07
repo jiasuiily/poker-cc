@@ -1,9 +1,9 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { ENGINE_VERSION } from '@poker/strategy';
 import type { Db } from '../db/client.js';
 import { handAnalyses, handPlayers } from '../db/schema.js';
 import type { LlmClient } from '../llm.js';
-import { claimAndExplain, ensureLocalAnalysis } from './service.js';
+import { claimAndExplain, ensureLocalAnalysis, playerHandIds } from './service.js';
 
 export interface BatchProgress {
   running: boolean;
@@ -75,13 +75,7 @@ export class BatchRunner {
 
   private async run(playerId: string, state: JobState): Promise<void> {
     const db = await this.opts.db();
-    const ids = (
-      await db
-        .select({ handId: handPlayers.handId })
-        .from(handPlayers)
-        .where(eq(handPlayers.playerId, playerId))
-        .orderBy(desc(handPlayers.endedAt), desc(handPlayers.handId))
-    ).map((r) => r.handId);
+    const ids = await playerHandIds(db, playerId);
 
     // Step 1: local analysis for every hand.
     for (const id of ids) {

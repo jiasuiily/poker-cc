@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { BatchRunner } from '../analysis/batch.js';
 import { HttpError } from '../http.js';
+import { createReport, listReports } from '../coach/service.js';
 import { playerStats, playerTrend } from '../stats/player.js';
 import type { ApiDeps } from './index.js';
 import { requireUser, userOf } from './middleware.js';
@@ -29,6 +30,15 @@ export function meRoutes(deps: ApiDeps, runner: BatchRunner): Router {
     const days = raw === undefined ? 30 : typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : NaN;
     if (!Number.isInteger(days) || days < 1 || days > 365) throw new HttpError(400, 'days 必须是 1 到 365 的整数');
     res.json(await playerTrend(await deps.db(), userOf(res).playerId, days));
+  });
+
+  r.post('/reports', async (_req, res) => {
+    const { report } = await createReport(await deps.db(), deps.llm, userOf(res).playerId);
+    res.status(202).json(report);
+  });
+
+  r.get('/reports', async (_req, res) => {
+    res.json(await listReports(await deps.db(), userOf(res).playerId));
   });
 
   return r;

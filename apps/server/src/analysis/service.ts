@@ -1,14 +1,34 @@
-import { and, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { buildReplayFrames } from '@poker/core';
 import { analyzeHand, ENGINE_VERSION, type DecisionReport } from '@poker/strategy';
 import type { Db } from '../db/client.js';
-import { handAnalyses } from '../db/schema.js';
+import { handAnalyses, handPlayers } from '../db/schema.js';
 import { loadHandForPlayer } from '../history/repo.js';
 import type { LlmClient } from '../llm.js';
 import { buildPrompt } from './prompt.js';
 import { takeQuota, type UsageKind } from './quota.js';
 
-export type LlmStatus = 'pending' | 'ok' | 'failed' | 'disabled' | 'limited';
+/** Ids of every hand the player took part in, newest first. */
+export async function playerHandIds(db: Db, playerId: string): Promise<string[]> {
+  const rows = await db
+    .select({ handId: handPlayers.handId })
+    .from(handPlayers)
+    .where(eq(handPlayers.playerId, playerId))
+    .orderBy(desc(handPlayers.endedAt), desc(handPlayers.handId));
+  return rows.map((r) => r.handId);
+}
+
+/** The player's hands that have no analysis row for the current engine version yet. */
+export async function handsLackingAnalysis(db: Db, playerId: string): Promise<string[]> {
+  const done = await db
+    .select({ handId: handAnalyses.handId })
+    .from(handAnalyses)
+    .where(and(eq(handAnalyses.playerId, playerId), eq(handAnalyses.engineVersion, ENGINE_VERSION)));
+  const have = new Set(done.map((r) => r.handId));
+  return (await playerHandIds(db, playerId)).filter((id) => !have.has(id));
+}
+
+export type LlmStatus ='pending' | 'ok' | 'failed' | 'disabled' | 'limited';
 
 export interface AnalysisResponse {
   decisions: DecisionReport[];

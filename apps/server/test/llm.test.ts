@@ -62,4 +62,8 @@ describe('llm client', () => {
   it('sanitize caps the length at 2000 characters', () => {
     expect([...sanitizeLlmText('好'.repeat(3000))]).toHaveLength(2000);
   });
+
+  it('sanitize honours a custom cap', () => {
+    expect(sanitizeLlmText('x'.repeat(5000), 4000)).toHaveLength(4000);
+  });
 });

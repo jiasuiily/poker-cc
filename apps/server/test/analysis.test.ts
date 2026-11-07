@@ -3,7 +3,8 @@ import { cardToString } from '@poker/core';
 import { createDb } from '../src/db/client.js';
 import { saveHand } from '../src/history/repo.js';
 import { getHandForPlayer } from '../src/history/repo.js';
-import { getAnalysis, requestAnalysis } from '../src/analysis/service.js';
+import { claimAndExplain, ensureLocalAnalysis, getAnalysis, requestAnalysis } from '../src/analysis/service.js';
+import { takeQuota, usedToday } from '../src/analysis/quota.js';
 import { buildPrompt } from '../src/analysis/prompt.js';
 import type { LlmClient } from '../src/llm.js';
 import { C, F, X, play, startTable } from '../../../packages/strategy/test/helpers.js';
@@ -118,5 +119,45 @@ describe('analysis service', () => {
       for (const c of p.hole) expect(user).not.toContain(cardToString(c));
     }
     expect(user).toContain(cardToString(rec.state.players.find((x) => x.seat === 0)!.hole[0]));
+  });
+});
+
+describe('analysis steps', () => {
+  it('counts hand and batch quota separately', async () => {
+    const db = await createDb({ memory: true });
+    for (let i = 0; i < 30; i++) expect(await takeQuota(db, 'p0', 'hand', 30)).toBe(true);
+    expect(await takeQuota(db, 'p0', 'hand', 30)).toBe(false);
+    expect(await takeQuota(db, 'p0', 'batch', 200)).toBe(true);
+    expect(await usedToday(db, 'p0', 'batch')).toBe(1);
+    expect(await usedToday(db, 'p0', 'hand')).toBe(31);
+    expect(await usedToday(db, 'p0', 'report')).toBe(0);
+  });
+
+  it('claimAndExplain reports busy for an ok hand without calling the llm', async () => {
+    const db = await setup();
+    const { llm, calls } = fakeLlm();
+    const r = await requestAnalysis(db, llm, 't1-1', 'p0', { dailyLimit: 30 });
+    if (r.status !== 'ok') throw new Error(r.status);
+    await r.job;
+    const out = await claimAndExplain(db, llm, 't1-1', 'p0', { kind: 'batch', limit: 200 });
+    expect(out.outcome).toBe('busy');
+    expect(calls).toHaveLength(1);
+  });
+
+  it('claimAndExplain returns disabled without an llm, started with one, limited over quota', async () => {
+    const db = await setup();
+    expect(await ensureLocalAnalysis(db, 't1-1', 'p0')).toBe('ok');
+    expect(await ensureLocalAnalysis(db, 't1-1', 'nobody')).toBe('forbidden');
+    expect(await ensureLocalAnalysis(db, 'nope', 'p0')).toBe('not_found');
+    expect((await claimAndExplain(db, null, 't1-1', 'p0', { kind: 'batch', limit: 5 })).outcome).toBe('disabled');
+    const { llm } = fakeLlm();
+    const s = await claimAndExplain(db, llm, 't1-1', 'p0', { kind: 'batch', limit: 1 });
+    expect(s.outcome).toBe('started');
+    await s.job;
+    expect(await getAnalysis(db, 't1-1', 'p0')).toMatchObject({ llmStatus: 'ok' });
+    await ensureLocalAnalysis(db, 't1-2', 'p0');
+    const l = await claimAndExplain(db, llm, 't1-2', 'p0', { kind: 'batch', limit: 1 });
+    expect(l.outcome).toBe('limited');
+    expect(await getAnalysis(db, 't1-2', 'p0')).toMatchObject({ llmStatus: 'limited' });
   });
 });

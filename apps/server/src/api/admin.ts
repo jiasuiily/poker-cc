@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { adminResetPassword, createInvites, listInvites, listUsers } from '../accounts/service.js';
+import { listReports } from '../coach/service.js';
+import { adminPlayers } from '../stats/admin.js';
 import type { ApiDeps } from './index.js';
 import { requireAdmin, requireUser, userOf } from './middleware.js';
 
@@ -19,6 +21,14 @@ export function adminRoutes(deps: ApiDeps): Router {
 
   r.get('/users', async (_req, res) => {
     res.json(await listUsers(await deps.db()));
+  });
+
+  r.get('/players', async (_req, res) => {
+    res.json(await adminPlayers(await deps.db()));
+  });
+
+  r.get('/players/:id/reports', async (req, res) => {
+    res.json(await listReports(await deps.db(), req.params.id));
   });
 
   r.post('/users/:id/reset-password', async (req, res) => {

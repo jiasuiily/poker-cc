@@ -77,6 +77,9 @@ export const api = {
     createInvites: (token: string, count: number, expiresInDays: number | null) =>
       call<{ codes: string[] }>('/api/admin/invites', { method: 'POST', body: JSON.stringify({ count, expiresInDays }), token }),
     users: (token: string) => call<UserRow[]>('/api/admin/users', { token }),
+    players: (token: string) => call<AdminPlayers>('/api/admin/players', { token }),
+    playerReports: (token: string, id: string) =>
+      call<CoachReport[]>(`/api/admin/players/${encodeURIComponent(id)}/reports`, { token }),
     resetPassword: (token: string, id: string) =>
       call<{ password: string }>(`/api/admin/users/${encodeURIComponent(id)}/reset-password`, { method: 'POST', token }),
   },
@@ -145,6 +148,32 @@ export interface CoachReport {
   status: 'pending' | 'ok' | 'failed';
   stats: PlayerStats;
   text: string | null;
+}
+
+/** Mirror of apps/server/src/stats/admin.ts. */
+export interface AdminPlayerRow {
+  id: string;
+  displayName: string;
+  username: string;
+  online: boolean;
+  lastSeenAt: string | null;
+  lastLoginAt: string | null;
+  loginCount: number;
+  hands: number;
+  playSeconds: number;
+  analyzedHands: number;
+  good: number;
+  ok: number;
+  mistake: number;
+  evLossPerHand: number;
+  reports: number;
+}
+
+export interface AdminPlayers {
+  total: number;
+  onlineNow: number;
+  active7d: number;
+  players: AdminPlayerRow[];
 }
 
 export interface InviteRow {

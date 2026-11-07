@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { AdminPlayersSection } from './AdminPlayers';
 import { api, type InviteRow, type Session, type UserRow } from '../net/api';
 
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -55,6 +56,8 @@ export function Admin({ session, onBack }: { session: Session; onBack: () => voi
         <h1 className="text-xl font-bold">管理</h1>
       </header>
       {err && <p className="mb-3 text-sm text-red-300">{err}</p>}
+
+      <AdminPlayersSection session={session} />
 
       <section className="mb-8 rounded-xl bg-felt-dark p-4 ring-1 ring-white/10">
         <h2 className="mb-3 font-semibold">邀请码</h2>

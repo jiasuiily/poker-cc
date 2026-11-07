@@ -35,7 +35,8 @@ const status = async (p: Promise<unknown>) => {
 describe('names', () => {
   it('normalises usernames and enforces the allowed set', () => {
     expect(normalizeUsername(' Tom_1 ')).toBe('tom_1');
-    for (const bad of ['ab', 'a'.repeat(21), '中文名字', 'tom smith', 'tom-1']) {
+    expect(normalizeUsername('Gu')).toBe('gu');
+    for (const bad of ['a', 'a'.repeat(21), '中文名字', 'tom smith', 'tom-1']) {
       expect(() => normalizeUsername(bad)).toThrow(HttpError);
     }
   });

@@ -1,9 +1,9 @@
 import { HttpError } from '../http.js';
 
-/** Login name: NFC, trimmed, lower-cased; 3–20 of [a-z0-9_]. */
+/** Login name: NFC, trimmed, lower-cased; 2–20 of [a-z0-9_]. */
 export function normalizeUsername(raw: unknown): string {
   const s = String(raw ?? '').normalize('NFC').trim().toLowerCase();
-  if (!/^[a-z0-9_]{3,20}$/.test(s)) throw new HttpError(400, '用户名须为 3–20 位字母、数字或下划线');
+  if (!/^[a-z0-9_]{2,20}$/.test(s)) throw new HttpError(400, '用户名须为 2–20 位字母、数字或下划线');
   return s;
 }
 

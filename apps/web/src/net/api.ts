@@ -69,7 +69,7 @@ export const api = {
     trend: (token: string, days = 30) => call<TrendDay[]>(`/api/me/trend?days=${days}`, { token }),
     analyzeAll: (token: string) => call<BatchProgress>('/api/me/analyze-all', { method: 'POST', token }),
     analyzeProgress: (token: string) => call<BatchProgress>('/api/me/analyze-all', { token }),
-    reports: (token: string) => call<CoachReport[]>('/api/me/reports', { token }),
+    reports: (token: string) => call<{ reports: CoachReport[]; remainingToday: number }>('/api/me/reports', { token }),
     createReport: (token: string) => call<CoachReport>('/api/me/reports', { method: 'POST', token }),
   },
   admin: {
@@ -221,7 +221,7 @@ export interface HandMeta {
   seats: { seat: number; playerId: string; name: string; isBot: boolean; botLevel?: string; botStyle?: string }[];
 }
 
-export type LlmStatus = 'pending' | 'ok' | 'failed' | 'disabled' | 'limited';
+export type LlmStatus = 'pending' | 'ok' | 'failed' | 'disabled' | 'limited' | 'idle';
 
 export interface AnalysisResponse {
   decisions: DecisionReport[];

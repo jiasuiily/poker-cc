@@ -8,6 +8,7 @@ const fmtTime = (iso: string) =>
 /** Overall coaching reports: generate, poll while pending, show the newest in full and fold the rest. */
 export function ReportsPanel({ session, onAuthExpired }: { session: Session; onAuthExpired: () => void }) {
   const [reports, setReports] = useState<CoachReport[] | null>(null);
+  const [remaining, setRemaining] = useState<number | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -25,7 +26,8 @@ export function ReportsPanel({ session, onAuthExpired }: { session: Session; onA
     try {
       const list = await api.me.reports(session.token);
       if (!alive.current) return;
-      setReports(list);
+      setReports(list.reports);
+      setRemaining(list.remainingToday);
       setLoadErr(null);
     } catch (e) {
       if (alive.current) handle(e, setLoadErr, '加载失败');
@@ -57,22 +59,26 @@ export function ReportsPanel({ session, onAuthExpired }: { session: Session; onA
       if (alive.current) handle(e, setActionErr, '生成失败');
     } finally {
       if (alive.current) setCreating(false);
+      void load(); // refresh the remaining count (a refused attempt still counts)
     }
   };
 
-  const latest = reports?.[0];
-  // Compare against the next older report that finished.
-  const previous = reports?.slice(1).find((r) => r.status === 'ok');
+  // The main report is the newest pending or ok one; failed attempts never replace a good report.
+  const mainIdx = reports?.findIndex((r) => r.status !== 'failed') ?? -1;
+  const latest = mainIdx >= 0 ? reports![mainIdx] : undefined;
+  const previous = latest?.status === 'ok' ? reports!.slice(mainIdx + 1).find((r) => r.status === 'ok') : undefined;
+  const lastFailed = reports?.[0]?.status === 'failed' && mainIdx !== 0;
+  const folded = reports && latest ? reports.filter((r) => r !== latest) : (reports ?? []);
 
   return (
     <section className="rounded-xl bg-felt-dark p-4 ring-1 ring-white/10">
       <h2 className="mb-3 text-sm font-semibold text-white/60">整体分析</h2>
       <button
         onClick={() => void create()}
-        disabled={creating || pending || reports === null}
+        disabled={creating || pending || reports === null || remaining === 0}
         className="w-full rounded-lg bg-emerald-500 py-2.5 font-semibold text-emerald-950 disabled:opacity-40"
       >
-        {creating || pending ? '生成中…' : '生成整体分析'}
+        {creating || pending ? '生成中…' : remaining === null ? '生成整体分析' : `生成整体分析（今日还剩 ${remaining} 次）`}
       </button>
       {actionErr && <p className="mt-2 text-sm text-red-300">{actionErr}</p>}
 
@@ -94,11 +100,12 @@ export function ReportsPanel({ session, onAuthExpired }: { session: Session; onA
             <p className="mt-3 text-sm text-white/50">还没有整体分析。打满 30 个决策点后可以生成一份。</p>
           ) : (
             <div className="mt-4 space-y-3">
-              <ReportCard report={latest!} previous={latest!.status === 'ok' ? previous : undefined} />
-              {reports.length > 1 && (
+              {lastFailed && <p className="text-xs text-red-300/80">上一次生成失败</p>}
+              {latest && <ReportCard report={latest} previous={previous} />}
+              {folded.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs text-white/40">更早的报告</p>
-                  {reports.slice(1).map((r) => (
+                  {folded.map((r) => (
                     <details key={r.id} className="rounded-lg bg-black/20 ring-1 ring-white/10">
                       <summary className="cursor-pointer px-3 py-2 text-sm text-white/70">
                         {fmtTime(r.createdAt)}

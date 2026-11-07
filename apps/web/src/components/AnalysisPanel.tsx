@@ -5,8 +5,9 @@ import { playerActionText, STREET_NAMES, verdictMark, verdictText } from '../for
 
 const LLM_TEXT: Record<string, string> = {
   disabled: '未配置大模型，仅显示本地分析',
-  limited: '今天的解说次数已用完',
+  limited: '解说额度已用完，可稍后再试',
   failed: '解说暂不可用',
+  idle: '',
   pending: '大模型解说生成中…',
 };
 
@@ -66,7 +67,7 @@ export function useAnalysis(session: Session, handId: string) {
 
 export function AnalysisPanel({ state, onSelect }: { state: ReturnType<typeof useAnalysis>; onSelect: (actionSeq: number) => void }) {
   const { analysis, busy, err, run } = state;
-  const canRetry = analysis && (analysis.llmStatus === 'failed' || analysis.llmStatus === 'limited');
+  const canRetry = analysis && (analysis.llmStatus === 'failed' || analysis.llmStatus === 'limited' || analysis.llmStatus === 'idle');
   return (
     <section className="rounded-xl bg-felt-dark p-3 ring-1 ring-white/10">
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -76,7 +77,7 @@ export function AnalysisPanel({ state, onSelect }: { state: ReturnType<typeof us
         </div>
         {(!analysis || canRetry) && (
           <button onClick={run} disabled={busy} className="shrink-0 rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold text-emerald-950 disabled:opacity-50">
-            {busy ? '分析中…' : analysis ? '重新获取解说' : '分析这手牌'}
+            {busy ? '分析中…' : analysis?.llmStatus === 'idle' ? '获取 AI 解说' : analysis ? '重新获取解说' : '分析这手牌'}
           </button>
         )}
       </div>
@@ -92,13 +93,15 @@ export function AnalysisPanel({ state, onSelect }: { state: ReturnType<typeof us
               ))}
             </ol>
           )}
-          <div className="mt-3 border-t border-white/10 pt-3 text-sm">
-            {analysis.llmStatus === 'ok' && analysis.llmText ? (
-              <p className="whitespace-pre-wrap leading-relaxed text-white/85">{analysis.llmText}</p>
-            ) : (
-              <p className="text-white/50">{LLM_TEXT[analysis.llmStatus] ?? ''}</p>
-            )}
-          </div>
+          {(analysis.llmStatus === 'ok' && analysis.llmText) || LLM_TEXT[analysis.llmStatus] ? (
+            <div className="mt-3 border-t border-white/10 pt-3 text-sm">
+              {analysis.llmStatus === 'ok' && analysis.llmText ? (
+                <p className="whitespace-pre-wrap leading-relaxed text-white/85">{analysis.llmText}</p>
+              ) : (
+                <p className="text-white/50">{LLM_TEXT[analysis.llmStatus] ?? ''}</p>
+              )}
+            </div>
+          ) : null}
         </>
       )}
     </section>

@@ -14,11 +14,18 @@ const LINES = [
 ] as const;
 
 /** Share of good / ok / mistake decisions per day (days without decisions are left out). Pure SVG. */
-export function TrendChart({ days }: { days: TrendDay[] }) {
+export function TrendChart({ days, windowDays = 30 }: { days: TrendDay[]; windowDays?: number }) {
   const data = days.filter((d) => d.good + d.ok + d.mistake > 0);
   if (data.length === 0) return <p className="text-sm text-white/50">还没有可画趋势的分析数据。</p>;
 
-  const x = (i: number) => (data.length === 1 ? (L + W - R) / 2 : L + (i * (W - L - R)) / (data.length - 1));
+  // Position by day offset in the window (ending today, Shanghai), so gaps show as gaps.
+  const dayNum = (s: string) => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) / 86_400_000;
+  const today = dayNum(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date()));
+  const startDay = Math.min(today - (windowDays - 1), dayNum(data[0]!.day));
+  const endDay = Math.max(today, dayNum(data[data.length - 1]!.day));
+  const span = endDay - startDay;
+  const x = (i: number) => L + ((dayNum(data[i]!.day) - startDay) / (span || 1)) * (W - L - R);
+  const anchor = (px: number) => (px < L + 20 ? 'start' : px > W - R - 20 ? 'end' : 'middle');
   const y = (p: number) => T + (1 - p) * (H - T - B);
   const share = (d: TrendDay, k: (typeof LINES)[number]['key']) => d[k] / (d.good + d.ok + d.mistake);
   const short = (s: string) => s.slice(5).replace('-', '/');
@@ -52,11 +59,11 @@ export function TrendChart({ days }: { days: TrendDay[] }) {
             ))}
           </g>
         ))}
-        <text x={L} y={H - 8} fontSize={9} fill="white" fillOpacity={0.6} textAnchor="start">
+        <text x={x(0)} y={H - 8} fontSize={9} fill="white" fillOpacity={0.6} textAnchor={anchor(x(0))}>
           {short(data[0]!.day)}
         </text>
-        {data.length > 1 && (
-          <text x={W - R} y={H - 8} fontSize={9} fill="white" fillOpacity={0.6} textAnchor="end">
+        {data.length > 1 && x(data.length - 1) - x(0) > 40 && (
+          <text x={x(data.length - 1)} y={H - 8} fontSize={9} fill="white" fillOpacity={0.6} textAnchor={anchor(x(data.length - 1))}>
             {short(data[data.length - 1]!.day)}
           </text>
         )}

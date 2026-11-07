@@ -179,3 +179,170 @@ describe('TableActor', () => {
     expect(actor.seats[0]!.stack).toBe(1000);
   });
 });
+
+const OWNER = { id: 'host', name: '房主' };
+const hosted = (over: Partial<typeof DEFAULT_TABLE_CONFIG> = {}, onRecord?: (rec: HandCompleteRecord) => void) =>
+  makeTable({ owner: OWNER, ...over }, onRecord);
+
+/** Fold whoever is to act until the hand ends (humans only). */
+function foldOut(actor: TableActor) {
+  for (let i = 0; i < 20 && actor.hand && actor.hand.street !== 'complete'; i++) {
+    const h = actor.hand;
+    actor.act(actor.seats[h.toAct!]!.playerId, h.handId, h.actionSeq, { kind: 'fold' });
+  }
+}
+
+describe('host controls', () => {
+  it('does not deal until the host starts; nobody else can start', () => {
+    const { actor, clock } = hosted();
+    actor.sit('host', '房主', 0);
+    actor.addBot(1);
+    clock.advance(10_000);
+    expect(actor.hand).toBeNull();
+    expect(actor.status()).toBe('waiting');
+    expect(actor.viewFor('host').control).toMatchObject({ hostId: 'host', hostName: '房主', youAreHost: true, running: false, started: false });
+    expect(actor.viewFor('guest').control.youAreHost).toBe(false);
+    expect(() => actor.start('guest')).toThrow(TableError);
+    actor.start('host');
+    clock.advance(1000);
+    expect(actor.hand).not.toBeNull();
+    expect(actor.status()).toBe('running');
+  });
+
+  it('one human plus one computer player is enough; a lone player cannot start', () => {
+    const { actor } = hosted();
+    actor.sit('host', '房主', 0);
+    expect(() => actor.start('host')).toThrow(/电脑/);
+    actor.addBot(1);
+    expect(() => actor.start('host')).not.toThrow();
+  });
+
+  it('pause lets the current hand finish and deals no more until resumed', () => {
+    const { actor, clock } = hosted({ botThinkMs: [0, 0] });
+    actor.addBot(0);
+    actor.addBot(1);
+    actor.start('host'); // the host need not be seated
+    clock.advance(500);
+    expect(actor.hand).not.toBeNull();
+    actor.pause('host');
+    const n = actor.handNo;
+    clock.advance(10 * 60_000);
+    expect(actor.hand!.street).toBe('complete');
+    expect(actor.handNo).toBe(n);
+    expect(actor.status()).toBe('paused');
+    expect(actor.viewFor('host').control).toMatchObject({ running: false, started: true });
+    expect(() => actor.pause('guest')).toThrow(TableError);
+    actor.start('host');
+    clock.advance(10_000);
+    expect(actor.handNo).toBeGreaterThan(n);
+  });
+
+  it('host rights pass to the earliest-seated connected human after 60 s away, and come back', () => {
+    const { actor, clock, changes } = hosted();
+    actor.setConnected('host', true);
+    actor.sit('bob', 'Bob', 1);
+    actor.sit('carol', 'Carol', 0);
+    actor.setConnected('host', false);
+    clock.advance(59_000);
+    expect(actor.viewFor('bob').control.hostId).toBe('host');
+    const before = changes();
+    clock.advance(2_000);
+    expect(changes()).toBeGreaterThan(before); // clients are told about the new host
+    expect(actor.viewFor('bob').control).toMatchObject({ hostId: 'bob', hostName: 'Bob', youAreHost: true });
+    actor.addSeat('bob');
+    expect(() => actor.addSeat('host')).toThrow(TableError);
+    actor.setConnected('bob', false);
+    expect(actor.viewFor('carol').control.hostId).toBe('carol');
+    actor.setConnected('host', true);
+    expect(actor.viewFor('host').control.youAreHost).toBe(true);
+  });
+
+  it('host adds seats up to 9 and removes empty seats down to 2; occupied seats stay', () => {
+    const { actor } = hosted({ maxSeats: 3 });
+    actor.sit('host', '房主', 0);
+    expect(() => actor.addSeat('guest')).toThrow(TableError);
+    for (let i = 0; i < 6; i++) actor.addSeat('host');
+    expect(actor.seats).toHaveLength(9);
+    expect(() => actor.addSeat('host')).toThrow(/9/);
+    expect(() => actor.removeSeat('host', 0)).toThrow(TableError);
+    expect(() => actor.removeSeat('guest', 8)).toThrow(TableError);
+    for (let s = 8; s >= 2; s--) actor.removeSeat('host', s);
+    expect(actor.seats).toHaveLength(2);
+    expect(() => actor.removeSeat('host', 1)).toThrow(/2/);
+    expect(actor.viewFor(null).table.maxSeats).toBe(2);
+  });
+
+  it('removing seats between hands renumbers players and the button moves on to the next player', () => {
+    const recs: HandCompleteRecord[] = [];
+    const { actor, clock } = hosted({ maxSeats: 6, betweenHandsMs: 60_000, botThinkMs: [0, 0] }, (r) => recs.push(r));
+    actor.addBot(1, 'beginner', 'tag');
+    actor.addBot(3, 'beginner', 'tag');
+    actor.addBot(5, 'beginner', 'tag');
+    actor.start('host');
+    clock.advance(1000);
+    expect(recs).toHaveLength(1);
+    const order = [1, 3, 5].map((s) => actor.seats[s]!.playerId);
+    const firstButton = actor.seats[recs[0]!.state.button]!.playerId;
+    actor.removeSeat('host', 2);
+    actor.removeSeat('host', 0);
+    // The finished hand is still on screen, so its seat numbers must stay valid until the next hand.
+    expect(actor.seats).toHaveLength(6);
+    expect(actor.viewFor(null).control.closingSeats).toEqual([0, 2]);
+    clock.advance(61_000);
+    expect(actor.seats.map((o) => o?.playerId ?? null)).toEqual([order[0], order[1], null, order[2]]);
+    expect(recs.length).toBeGreaterThanOrEqual(2);
+    const r2 = recs[1]!;
+    expect(r2.maxSeats).toBe(4);
+    const secondButton = r2.seats.find((s) => s.seat === r2.state.button)!.playerId;
+    expect(secondButton).toBe(order[(order.indexOf(firstButton) + 1) % 3]);
+  });
+
+  it('removing a seat during a hand closes it now and removes it when the next hand starts', () => {
+    const recs: HandCompleteRecord[] = [];
+    const { actor, clock } = hosted({ maxSeats: 4, betweenHandsMs: 60_000 }, (r) => recs.push(r));
+    actor.sit('host', '房主', 0);
+    actor.sit('bob', 'Bob', 1);
+    actor.start('host');
+    clock.advance(400);
+    expect(actor.hand!.street).not.toBe('complete');
+    actor.removeSeat('host', 2);
+    actor.addSeat('host'); // adding is immediate even mid-hand
+    expect(actor.seats).toHaveLength(5);
+    expect(actor.viewFor('host').control.closingSeats).toEqual([2]);
+    expect(() => actor.sit('dan', 'Dan', 2)).toThrow(/关闭/);
+    expect(() => actor.addBot(2)).toThrow(/关闭/);
+    foldOut(actor);
+    expect(actor.hand!.street).toBe('complete');
+    expect(actor.seats).toHaveLength(5); // result still shown with the hand's seat numbers
+    expect(recs[0]!.maxSeats).toBe(4); // seat count when the hand started
+    clock.advance(61_000);
+    expect(actor.handNo).toBe(2);
+    expect(actor.seats).toHaveLength(4);
+    expect(actor.viewFor('host').control.closingSeats).toEqual([]);
+  });
+
+  it('while paused, removing a seat applies at once and clears the finished hand from the table', () => {
+    const { actor, clock } = hosted({ maxSeats: 4 });
+    actor.sit('host', '房主', 0);
+    actor.sit('bob', 'Bob', 1);
+    actor.start('host');
+    clock.advance(400);
+    actor.removeSeat('host', 3); // closing during the hand
+    actor.pause('host');
+    foldOut(actor);
+    expect(actor.viewFor('host').control.closingSeats).toEqual([3]);
+    actor.removeSeat('host', 2);
+    expect(actor.seats).toHaveLength(2);
+    expect(actor.hand).toBeNull();
+    expect(actor.viewFor('host').control.closingSeats).toEqual([]);
+  });
+
+  it('a table without an owner deals on its own (tests, internal tables)', () => {
+    const { actor, clock } = makeTable();
+    actor.addBot(0);
+    actor.addBot(1);
+    clock.advance(1000);
+    expect(actor.hand).not.toBeNull();
+    expect(actor.viewFor(null).control.hostId).toBeNull();
+  });
+});

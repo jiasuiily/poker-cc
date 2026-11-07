@@ -1,4 +1,4 @@
-import { randomInt as cryptoRandomInt } from 'node:crypto';
+import { randomInt as cryptoRandomInt, randomUUID } from 'node:crypto';
 import { Room, type Client } from '@colyseus/core';
 import type { PlayerAction } from '@poker/core';
 import type { BotLevel, StyleId } from '@poker/ai';
@@ -6,7 +6,7 @@ import { verifyToken, type AuthUser } from '../auth.js';
 import { getDb } from '../db/client.js';
 import { saveHand } from '../history/repo.js';
 import { trackSave } from '../persistence.js';
-import { DEFAULT_TABLE_CONFIG, TableActor, TableError } from '../table/TableActor.js';
+import { DEFAULT_TABLE_CONFIG, MAX_SEATS, MIN_SEATS, TableActor, TableError, type TableStatus } from '../table/TableActor.js';
 
 export const PROTOCOL_VERSION = 1;
 
@@ -18,7 +18,14 @@ export interface TableRoomOptions {
   bots?: number;
   botLevel?: BotLevel;
   botStyle?: StyleId | 'random';
+  /** Set by the create-table API from the logged-in user. */
+  owner?: { id: string; name: string };
+  /** Must equal SERVER_CREATE_KEY for `owner` to be trusted (clients can create rooms directly). */
+  serverKey?: string;
 }
+
+/** Per-process secret: only room creations from our own API may name an owner. */
+export const SERVER_CREATE_KEY = randomUUID();
 
 /** Save with up to 2 retries; failures are logged and never affect the table (spec 4.3). */
 async function persistHand(rec: Parameters<typeof saveHand>[1], log: (m: string) => void) {
@@ -40,6 +47,8 @@ export interface TableMetadata {
   bigBlind: number;
   seated: number;
   humans: number;
+  status: TableStatus;
+  hostName: string | null;
 }
 
 type PokerClient = Client<{ auth: AuthUser }>;
@@ -58,7 +67,9 @@ export class TableRoom extends Room<{ metadata: TableMetadata; client: PokerClie
   private idleTimer: (() => void) | null = null;
 
   onCreate(options: TableRoomOptions) {
-    const maxSeats = [2, 6, 9].includes(Number(options.maxSeats)) ? Number(options.maxSeats) : 6;
+    const maxSeats = clampInt(options.maxSeats, MIN_SEATS, MAX_SEATS, 6);
+    const o = options.serverKey === SERVER_CREATE_KEY ? options.owner : undefined;
+    const owner = o && typeof o.id === 'string' && typeof o.name === 'string' ? { id: o.id, name: o.name } : null;
     const bb = clampInt(options.bigBlind, 2, 10_000, 10);
     const sb = clampInt(options.smallBlind, 1, bb, Math.floor(bb / 2));
     this.actor = new TableActor(
@@ -70,6 +81,7 @@ export class TableRoom extends Room<{ metadata: TableMetadata; client: PokerClie
         smallBlind: sb,
         bigBlind: bb,
         buyIn: bb * 100,
+        owner,
       },
       {
         randomInt: (max) => cryptoRandomInt(max),
@@ -106,6 +118,12 @@ export class TableRoom extends Room<{ metadata: TableMetadata; client: PokerClie
       this.run(c, () => this.actor.addBot(Number(m?.seat), m?.level ?? 'advanced', m?.style ?? 'random')),
     );
     this.onMessage('removeBot', (c: PokerClient, m: { seat: number }) => this.run(c, () => this.actor.removeBot(Number(m?.seat))));
+    this.onMessage('start', (c: PokerClient) => this.run(c, () => this.actor.start(c.auth!.playerId)));
+    this.onMessage('pause', (c: PokerClient) => this.run(c, () => this.actor.pause(c.auth!.playerId)));
+    this.onMessage('addSeat', (c: PokerClient) => this.run(c, () => this.actor.addSeat(c.auth!.playerId)));
+    this.onMessage('removeSeat', (c: PokerClient, m: { seat: number }) =>
+      this.run(c, () => this.actor.removeSeat(c.auth!.playerId, Number(m?.seat))),
+    );
     this.onMessage('act', (c: PokerClient, m: { handId: string; seq: number; action: PlayerAction }) =>
       this.run(c, () => this.actor.act(c.auth!.playerId, String(m?.handId), Number(m?.seq), parseAction(m?.action))),
     );
@@ -163,11 +181,13 @@ export class TableRoom extends Room<{ metadata: TableMetadata; client: PokerClie
     const seated = this.actor.seats.filter(Boolean).length;
     void this.setMetadata({
       name: cfg.name,
-      maxSeats: cfg.maxSeats,
+      maxSeats: this.actor.seats.length,
       smallBlind: cfg.smallBlind,
       bigBlind: cfg.bigBlind,
       seated,
       humans: this.actor.humanCount(),
+      status: this.actor.status(),
+      hostName: this.actor.viewFor(null).control.hostName,
     });
   }
 }

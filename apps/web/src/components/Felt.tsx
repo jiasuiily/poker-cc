@@ -29,9 +29,27 @@ interface Props {
   onSit?: (seat: number) => void;
   onAddBot?: (seat: number) => void;
   onRemoveBot?: (seat: number) => void;
+  /** Host only: remove this empty seat. */
+  onRemoveSeat?: (seat: number) => void;
+  /** Empty seats that close when the current hand ends. */
+  closingSeats?: number[];
 }
 
-export function Felt({ maxSeats: n, anchorSeat, seats, hand, deadline = null, timeoutMs = 20_000, clockOffset = 0, canSit = false, onSit, onAddBot, onRemoveBot }: Props) {
+export function Felt({
+  maxSeats: n,
+  anchorSeat,
+  seats,
+  hand,
+  deadline = null,
+  timeoutMs = 20_000,
+  clockOffset = 0,
+  canSit = false,
+  onSit,
+  onAddBot,
+  onRemoveBot,
+  onRemoveSeat,
+  closingSeats = [],
+}: Props) {
   const anchor = anchorSeat ?? 0;
   const pos = (seat: number, rx: number, ry: number) => {
     const k = (seat - anchor + n) % n;
@@ -70,8 +88,15 @@ export function Felt({ maxSeats: n, anchorSeat, seats, hand, deadline = null, ti
                   clockOffset={clockOffset}
                   onRemoveBot={onRemoveBot ? () => onRemoveBot(seat) : undefined}
                 />
+              ) : closingSeats.includes(seat) ? (
+                <div className="rounded-full bg-black/30 px-2 py-1 text-[11px] text-white/40">即将关闭</div>
               ) : onSit || onAddBot ? (
-                <EmptySeat canSit={canSit} onSit={() => onSit?.(seat)} onAddBot={onAddBot ? () => onAddBot(seat) : undefined} />
+                <EmptySeat
+                  canSit={canSit}
+                  onSit={() => onSit?.(seat)}
+                  onAddBot={onAddBot ? () => onAddBot(seat) : undefined}
+                  onRemoveSeat={onRemoveSeat ? () => onRemoveSeat(seat) : undefined}
+                />
               ) : null}
             </div>
             {hp && hp.committed > 0 && hand?.street !== 'complete' && (
@@ -91,7 +116,7 @@ export function Felt({ maxSeats: n, anchorSeat, seats, hand, deadline = null, ti
   );
 }
 
-function EmptySeat({ canSit, onSit, onAddBot }: { canSit: boolean; onSit: () => void; onAddBot?: () => void }) {
+function EmptySeat({ canSit, onSit, onAddBot, onRemoveSeat }: { canSit: boolean; onSit: () => void; onAddBot?: () => void; onRemoveSeat?: () => void }) {
   return (
     <div className="flex flex-col items-center gap-1">
       {canSit && (
@@ -102,6 +127,11 @@ function EmptySeat({ canSit, onSit, onAddBot }: { canSit: boolean; onSit: () => 
       {onAddBot && (
         <button onClick={onAddBot} className="rounded-full bg-black/30 px-2 py-1 text-[11px] text-white/60 ring-1 ring-white/15 hover:text-white">
           + 电脑
+        </button>
+      )}
+      {onRemoveSeat && (
+        <button onClick={onRemoveSeat} aria-label="删除这个座位" className="text-[10px] text-white/35 hover:text-red-300">
+          删座位
         </button>
       )}
     </div>

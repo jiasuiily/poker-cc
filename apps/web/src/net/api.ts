@@ -145,6 +145,8 @@ export interface TableListing {
   bigBlind: number;
   seated: number;
   humans: number;
+  status: 'waiting' | 'running' | 'paused';
+  hostName: string | null;
 }
 
 export interface CreateTableOptions {
@@ -180,4 +182,15 @@ export interface TableView {
   deadline: number | null;
   serverTime: number;
   handNo: number;
+  control: {
+    hostId: string | null;
+    hostName: string | null;
+    youAreHost: boolean;
+    running: boolean;
+    started: boolean;
+    closingSeats: number[];
+  };
 }
+
+export const MAX_SEATS = 9;
+export const MIN_SEATS = 2;

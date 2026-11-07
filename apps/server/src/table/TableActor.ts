@@ -27,7 +27,17 @@ export interface TableConfig {
   botThinkMs: [number, number];
   /** Consecutive timeouts before a player is sat out. */
   maxTimeouts: number;
+  /**
+   * Who created the table. A table with an owner waits for the host to press Start;
+   * one without (tests, internal tables) deals as soon as two players are seated.
+   */
+  owner: { id: string; name: string } | null;
 }
+
+export const MIN_SEATS = 2;
+export const MAX_SEATS = 9;
+/** How long the owner may be away before host rights pass to a seated human. */
+export const HOST_GRACE_MS = 60_000;
 
 export const DEFAULT_TABLE_CONFIG: Omit<TableConfig, 'tableId' | 'name'> = {
   maxSeats: 6,
@@ -38,6 +48,7 @@ export const DEFAULT_TABLE_CONFIG: Omit<TableConfig, 'tableId' | 'name'> = {
   betweenHandsMs: 3_500,
   botThinkMs: [700, 2600],
   maxTimeouts: 2,
+  owner: null,
 };
 
 export interface Occupant {
@@ -51,6 +62,8 @@ export interface Occupant {
   connected: boolean;
   timeouts: number;
   leaveAfterHand: boolean;
+  /** Increasing counter: who sat down first (host fallback order). */
+  seatedAt: number;
 }
 
 export interface SeatView {
@@ -100,7 +113,23 @@ export interface TableView {
   deadline: number | null;
   serverTime: number;
   handNo: number;
+  control: TableControl;
 }
+
+export interface TableControl {
+  /** Current host (null: table without an owner). */
+  hostId: string | null;
+  hostName: string | null;
+  youAreHost: boolean;
+  /** Dealing hands (false before Start and while paused). */
+  running: boolean;
+  /** Start has been pressed at least once (the button then reads "继续"). */
+  started: boolean;
+  /** Empty seats the host removed; they disappear when the next hand starts. */
+  closingSeats: number[];
+}
+
+export type TableStatus = 'waiting' | 'running' | 'paused';
 
 export interface ActorDeps {
   randomInt: RandomInt;
@@ -137,11 +166,23 @@ export class TableActor {
   private turnTimer: (() => void) | null = null;
   private nextHandTimer: (() => void) | null = null;
   private botCounter = 0;
+  private seatCounter = 0;
   private busy = false;
   private pending: (() => void)[] = [];
+  private running: boolean;
+  private started: boolean;
+  /** When the owner's last connection closed (null: connected). */
+  private ownerAwaySince: number | null;
+  private hostTimer: (() => void) | null = null;
+  private closing = new Set<number>();
+  private handMaxSeats = 0;
 
   constructor(readonly config: TableConfig, private deps: ActorDeps) {
     this.seats = new Array(config.maxSeats).fill(null);
+    this.running = this.started = config.owner === null;
+    // The creator is expected to join right away; if they never do, rights pass after the grace period.
+    this.ownerAwaySince = config.owner ? deps.now() : null;
+    if (config.owner) this.armHostTimer();
   }
 
   // ---------------------------------------------------------------- serial queue
@@ -167,10 +208,11 @@ export class TableActor {
   // ---------------------------------------------------------------- commands
   sit(playerId: string, name: string, seat: number) {
     return this.exec(() => {
-      this.assertSeat(seat);
+      this.assertOpenSeat(seat);
       if (this.seatOf(playerId) !== null) throw new TableError('already_seated', '你已经在座位上了');
       if (this.seats[seat]) throw new TableError('seat_taken', '这个座位已经有人了');
       this.seats[seat] = {
+        seatedAt: ++this.seatCounter,
         playerId,
         name,
         isBot: false,
@@ -188,10 +230,11 @@ export class TableActor {
     if (level !== 'beginner' && level !== 'advanced') throw new TableError('bad_level', '电脑难度无效');
     if (style !== 'random' && !isStyleId(style)) throw new TableError('bad_style', '电脑风格无效');
     return this.exec(() => {
-      this.assertSeat(seat);
+      this.assertOpenSeat(seat);
       if (this.seats[seat]) throw new TableError('seat_taken', '这个座位已经有人了');
       const n = ++this.botCounter;
       this.seats[seat] = {
+        seatedAt: ++this.seatCounter,
         playerId: `bot-${this.config.tableId}-${n}`,
         name: `电脑${n}号`,
         isBot: true,
@@ -255,7 +298,79 @@ export class TableActor {
     return this.exec(() => {
       const seat = this.seatOf(playerId);
       if (seat !== null) this.seats[seat]!.connected = connected;
+      if (playerId === this.config.owner?.id) {
+        this.hostTimer?.();
+        this.hostTimer = null;
+        this.ownerAwaySince = connected ? null : this.deps.now();
+        if (!connected) this.armHostTimer();
+      }
     });
+  }
+
+  // ---------------------------------------------------------------- host commands
+  /** Start (or resume) dealing. Needs two players who can play; computer players count. */
+  start(playerId: string) {
+    return this.exec(() => {
+      this.assertHost(playerId);
+      if (this.eligibleSeats().length < 2) throw new TableError('need_players', '至少要 2 人才能开始：请先坐一个电脑或等其他人入座');
+      this.running = this.started = true;
+      this.maybeScheduleHand();
+    });
+  }
+
+  /** Stop dealing; a hand in progress plays out. */
+  pause(playerId: string) {
+    return this.exec(() => {
+      this.assertHost(playerId);
+      this.running = false;
+      this.nextHandTimer?.();
+      this.nextHandTimer = null;
+    });
+  }
+
+  /** Add an empty seat at the end (takes effect at once, even mid-hand). */
+  addSeat(playerId: string) {
+    return this.exec(() => {
+      this.assertHost(playerId);
+      if (this.seats.length >= MAX_SEATS) throw new TableError('max_seats', `最多 ${MAX_SEATS} 个座位`);
+      this.seats.push(null);
+    });
+  }
+
+  /**
+   * Remove an empty seat. Removing renumbers the seats after it, so while a hand is on the
+   * table (in progress, or finished and still shown) the seat is only marked closing and goes
+   * when the next hand starts. With nothing dealt, or while paused, it goes at once (a paused
+   * table drops the finished hand from view, whose seat numbers would no longer match).
+   */
+  removeSeat(playerId: string, seat: number) {
+    return this.exec(() => {
+      this.assertHost(playerId);
+      this.assertSeat(seat);
+      if (this.seats[seat]) throw new TableError('seat_taken', '有人的座位不能删除');
+      if (this.closing.has(seat)) return;
+      if (this.seats.length - this.closing.size <= MIN_SEATS) throw new TableError('min_seats', `至少保留 ${MIN_SEATS} 个座位`);
+      this.closing.add(seat);
+      if (this.hand === null || (!this.running && !this.handInProgress())) {
+        this.hand = null;
+        this.applyClosing();
+      }
+    });
+  }
+
+  status(): TableStatus {
+    return this.running ? 'running' : this.started ? 'paused' : 'waiting';
+  }
+
+  /** The owner, unless away for longer than the grace period; then the earliest-seated connected human. */
+  hostId(): string | null {
+    const owner = this.config.owner;
+    if (!owner) return null;
+    if (this.ownerAwaySince === null || this.deps.now() - this.ownerAwaySince < HOST_GRACE_MS) return owner.id;
+    const stand = this.seats
+      .filter((o): o is Occupant => !!o && !o.isBot && o.connected && !o.leaveAfterHand && o.playerId !== owner.id)
+      .sort((a, b) => a.seatedAt - b.seatedAt)[0];
+    return stand?.playerId ?? owner.id;
   }
 
   /**
@@ -277,7 +392,8 @@ export class TableActor {
   dispose() {
     this.turnTimer?.();
     this.nextHandTimer?.();
-    this.turnTimer = this.nextHandTimer = null;
+    this.hostTimer?.();
+    this.turnTimer = this.nextHandTimer = this.hostTimer = null;
   }
 
   // ---------------------------------------------------------------- views
@@ -289,7 +405,7 @@ export class TableActor {
       table: {
         tableId: this.config.tableId,
         name: this.config.name,
-        maxSeats: this.config.maxSeats,
+        maxSeats: this.seats.length,
         smallBlind: this.config.smallBlind,
         bigBlind: this.config.bigBlind,
         buyIn: this.config.buyIn,
@@ -317,6 +433,22 @@ export class TableActor {
       deadline: this.deadline,
       serverTime: this.deps.now(),
       handNo: this.handNo,
+      control: this.controlFor(playerId),
+    };
+  }
+
+  private controlFor(playerId: string | null): TableControl {
+    const hostId = this.hostId();
+    const owner = this.config.owner;
+    const hostName =
+      hostId === null ? null : hostId === owner?.id ? owner.name : (this.seats.find((o) => o?.playerId === hostId)?.name ?? null);
+    return {
+      hostId,
+      hostName,
+      youAreHost: hostId !== null && hostId === playerId,
+      running: this.running,
+      started: this.started,
+      closingSeats: [...this.closing].sort((a, b) => a - b),
     };
   }
 
@@ -336,7 +468,42 @@ export class TableActor {
   }
 
   private assertSeat(seat: number) {
-    if (!Number.isInteger(seat) || seat < 0 || seat >= this.config.maxSeats) throw new TableError('bad_seat', '座位号无效');
+    if (!Number.isInteger(seat) || seat < 0 || seat >= this.seats.length) throw new TableError('bad_seat', '座位号无效');
+  }
+
+  private assertOpenSeat(seat: number) {
+    this.assertSeat(seat);
+    if (this.closing.has(seat)) throw new TableError('seat_closing', '这个座位即将关闭');
+  }
+
+  private assertHost(playerId: string) {
+    if (this.hostId() !== playerId) throw new TableError('not_host', '只有房主可以这样做');
+  }
+
+  private armHostTimer() {
+    this.hostTimer?.();
+    // Fire just after the grace period so every client is told about the new host.
+    this.hostTimer = this.deps.setTimer(() => {
+      this.hostTimer = null;
+      this.exec(() => {});
+    }, HOST_GRACE_MS + 1);
+  }
+
+  private handInProgress(): boolean {
+    return !!this.hand && this.hand.street !== 'complete';
+  }
+
+  /**
+   * Drop the closing seats (highest first so indices stay valid); later seats shift down and
+   * the button index follows its player. Only call with no hand on the table.
+   */
+  private applyClosing() {
+    for (const seat of [...this.closing].sort((a, b) => b - a)) {
+      if (this.seats[seat]) continue;
+      this.seats.splice(seat, 1);
+      if (this.button >= seat) this.button--;
+    }
+    this.closing.clear();
   }
 
   private inHand(seat: number): boolean {
@@ -360,7 +527,7 @@ export class TableActor {
   }
 
   private maybeScheduleHand() {
-    if (this.nextHandTimer) return;
+    if (!this.running || this.nextHandTimer) return;
     if (this.hand && this.hand.street !== 'complete') return;
     if (this.eligibleSeats().length < 2) return;
     const delay = this.hand ? this.config.betweenHandsMs : 300;
@@ -371,7 +538,8 @@ export class TableActor {
   }
 
   private startNextHand() {
-    if (this.hand && this.hand.street !== 'complete') return;
+    if (!this.running || this.handInProgress()) return;
+    this.applyClosing(); // the finished hand leaves the table now, so renumbering is safe
     const eligible = this.eligibleSeats();
     if (eligible.length < 2) {
       this.hand = null;
@@ -390,6 +558,7 @@ export class TableActor {
     };
     this.events = [ev];
     this.handStartedAt = this.deps.now();
+    this.handMaxSeats = this.seats.length;
     this.handSeats = eligible.map((seat) => {
       const o = this.seats[seat]!;
       return {
@@ -437,7 +606,7 @@ export class TableActor {
         this.deps.onHandComplete?.({
           tableId: this.config.tableId,
           tableName: this.config.name,
-          maxSeats: this.config.maxSeats,
+          maxSeats: this.handMaxSeats,
           handNo: this.handNo,
           events: this.events,
           state: h,

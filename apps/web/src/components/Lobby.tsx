@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { api, type Session, type TableListing } from '../net/api';
+import { api, MAX_SEATS, MIN_SEATS, type Session, type TableListing } from '../net/api';
 import { History } from './History';
 import { LevelStyleFields, type BotLevelChoice, type BotStyleChoice } from './BotPicker';
+
+const STATUS_TEXT: Record<string, string> = { waiting: '等待开始', running: '进行中', paused: '已暂停' };
 
 const STAKES = [
   [5, 10],
@@ -128,11 +130,14 @@ export function Lobby({ session, tab, onTab, onJoin, onOpenHand, onLogout }: Lob
                   <span>
                     <span className="block font-medium">{t.name}</span>
                     <span className="text-sm text-white/60">
-                      盲注 {t.smallBlind}/{t.bigBlind} · {t.maxSeats} 人桌
+                      盲注 {t.smallBlind}/{t.bigBlind} · {t.maxSeats} 人桌{t.hostName ? ` · 房主 ${t.hostName}` : ''}
                     </span>
                   </span>
-                  <span className="text-sm text-white/70">
-                    {t.seated}/{t.maxSeats} 已入座
+                  <span className="flex flex-col items-end text-sm text-white/70">
+                    <span className={t.status === 'running' ? 'text-emerald-300' : 'text-amber-200/80'}>{STATUS_TEXT[t.status] ?? ''}</span>
+                    <span>
+                      {t.seated}/{t.maxSeats} 已入座
+                    </span>
                   </span>
                 </button>
               </li>
@@ -153,7 +158,17 @@ export function Lobby({ session, tab, onTab, onJoin, onOpenHand, onLogout }: Lob
               className="w-full rounded-lg bg-black/30 px-3 py-2 outline-none ring-1 ring-white/15 focus:ring-emerald-400"
             />
           </label>
-          <Choice label="座位数" value={maxSeats} options={[2, 6, 9].map((n) => [n, `${n} 人`])} onChange={setMaxSeats} />
+          <label className="text-sm">
+            <span className="mb-1 block text-white/70">座位数：{maxSeats} 个（开桌后房主还能增减）</span>
+            <input
+              type="range"
+              min={MIN_SEATS}
+              max={MAX_SEATS}
+              value={maxSeats}
+              onChange={(e) => setMaxSeats(Number(e.target.value))}
+              className="w-full accent-emerald-400"
+            />
+          </label>
           <Choice label="盲注" value={stake} options={STAKES.map((s, i) => [i, `${s[0]}/${s[1]}`])} onChange={setStake} />
           <label className="text-sm sm:col-span-2">
             <span className="mb-1 block text-white/70">

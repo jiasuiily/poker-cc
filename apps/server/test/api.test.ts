@@ -5,13 +5,14 @@ import { createDb, type Db } from '../src/db/client.js';
 import { mountApi, type ApiDeps } from '../src/api/index.js';
 import { LoginLimiter } from '../src/accounts/rateLimit.js';
 import { createAdmin, createInvites } from '../src/accounts/service.js';
+import type { TableRoomOptions } from '../src/rooms/TableRoom.js';
 
 const servers: { close(): void }[] = [];
 afterEach(() => servers.splice(0).forEach((s) => s.close()));
 
 async function start(over: Partial<ApiDeps> = {}) {
   const db = await createDb({ memory: true });
-  const created: unknown[] = [];
+  const created: TableRoomOptions[] = [];
   const deps: ApiDeps = {
     db: async () => db,
     llm: null,
@@ -131,6 +132,10 @@ describe('tables API', () => {
     const ok = await call('POST', '/api/tables', { name: 't', bots: 1, botLevel: 'beginner', botStyle: 'random' }, u.token);
     expect(ok.status).toBe(200);
     expect(created).toHaveLength(1);
+    // The creator becomes the table's owner (host); a client cannot choose the owner.
+    expect(created[0]!.owner).toEqual({ id: u.playerId, name: 'ALICE' });
+    await call('POST', '/api/tables', { name: 't', owner: { id: 'someone', name: 'X' } }, u.token);
+    expect(created[1]!.owner).toEqual({ id: u.playerId, name: 'ALICE' });
     expect((await call('POST', '/api/tables', { name: 't' })).status).toBe(401);
   });
 });

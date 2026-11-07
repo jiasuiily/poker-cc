@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CATEGORY_NAMES, categoryOf, type PlayerView } from '@poker/core';
-import type { Session, SeatView } from '../net/api';
+import { MAX_SEATS, MIN_SEATS, type Session, type SeatView, type TableView } from '../net/api';
 import { useTable } from '../net/useTable';
 import { ActionBar } from './ActionBar';
 import { BotPicker, botBadge } from './BotPicker';
@@ -56,6 +56,8 @@ export function TablePage({ roomId, session, onExit, onAuthExpired }: Props) {
         <ConnBadge conn={conn} />
       </header>
 
+      <HostBar view={view} send={send} />
+
       <Felt
         maxSeats={view.table.maxSeats}
         anchorSeat={view.you.seat}
@@ -68,6 +70,12 @@ export function TablePage({ roomId, session, onExit, onAuthExpired }: Props) {
         onSit={(seat) => send('sit', { seat })}
         onAddBot={(seat) => setPickerSeat(seat)}
         onRemoveBot={(seat) => send('removeBot', { seat })}
+        onRemoveSeat={
+          view.control.youAreHost && view.table.maxSeats - view.control.closingSeats.length > MIN_SEATS
+            ? (seat) => send('removeSeat', { seat })
+            : undefined
+        }
+        closingSeats={view.control.closingSeats}
       />
       {pickerSeat !== null && (
         <BotPicker
@@ -110,6 +118,38 @@ export function TablePage({ roomId, session, onExit, onAuthExpired }: Props) {
   );
 }
 
+/** Host name, and for the host: Start / Pause / Resume and add a seat. Others see the waiting notice. */
+function HostBar({ view, send }: { view: TableView; send: (type: string, payload?: unknown) => void }) {
+  const c = view.control;
+  if (c.hostId === null) return null;
+  const idle = !c.running;
+  return (
+    <div className="mb-2 flex flex-wrap items-center justify-center gap-2 text-sm">
+      <span className="text-white/60">房主：{c.hostName ?? '—'}</span>
+      {c.youAreHost ? (
+        <>
+          {idle ? (
+            <button onClick={() => send('start')} className="rounded-lg bg-emerald-500 px-4 py-1.5 font-semibold text-emerald-950">
+              {c.started ? '继续' : '开始'}
+            </button>
+          ) : (
+            <SmallBtn onClick={() => send('pause')}>暂停</SmallBtn>
+          )}
+          <SmallBtn onClick={() => send('addSeat')} disabled={view.table.maxSeats >= MAX_SEATS}>
+            + 座位
+          </SmallBtn>
+          {idle && !c.started && <span className="text-xs text-white/50">坐好（可以加电脑）后点开始</span>}
+        </>
+      ) : (
+        idle && <span className="text-amber-200/80">{c.started ? '已暂停，等待房主继续' : '等待房主开始'}</span>
+      )}
+      {!idle && !view.hand && view.seats.filter((s) => s && !s.sittingOut && s.stack > 0).length < 2 && (
+        <span className="text-white/50">等待玩家入座…</span>
+      )}
+    </div>
+  );
+}
+
 function ConnBadge({ conn }: { conn: string }) {
   const map: Record<string, [string, string]> = {
     online: ['在线', 'bg-emerald-400'],
@@ -126,7 +166,7 @@ function ConnBadge({ conn }: { conn: string }) {
 }
 
 function SmallBtn(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <button {...props} className="rounded-lg bg-white/10 px-3 py-2 ring-1 ring-white/15 active:bg-white/20" />;
+  return <button {...props} className="rounded-lg bg-white/10 px-3 py-2 ring-1 ring-white/15 active:bg-white/20 disabled:opacity-40" />;
 }
 
 function ResultBanner({ hand, seats, canReview }: { hand: PlayerView; seats: (SeatView | null)[]; canReview: boolean }) {

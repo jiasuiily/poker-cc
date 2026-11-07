@@ -6,7 +6,7 @@ import { mountApi } from './api/index.js';
 import { closeDb, getDb } from './db/client.js';
 import { createLlmClient } from './llm.js';
 import { drainSaves } from './persistence.js';
-import { TableRoom, type TableMetadata } from './rooms/TableRoom.js';
+import { SERVER_CREATE_KEY, TableRoom, type TableMetadata } from './rooms/TableRoom.js';
 import { mountWeb } from './web.js';
 
 const PORT = Number(process.env.PORT ?? 2567);
@@ -24,7 +24,7 @@ const gameServer = new Server({
       limiter: new LoginLimiter(),
       listTables: async () =>
         (await matchMaker.query({ name: 'table' })).map((r) => ({ roomId: r.roomId, clients: r.clients, ...(r.metadata as TableMetadata) })),
-      createTable: async (opts) => (await matchMaker.createRoom('table', opts)).roomId,
+      createTable: async (opts) => (await matchMaker.createRoom('table', { ...opts, serverKey: SERVER_CREATE_KEY })).roomId,
     });
     if (WEB_DIR && existsSync(WEB_DIR)) mountWeb(app, WEB_DIR);
   },

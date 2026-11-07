@@ -68,7 +68,7 @@ export function Login({ onLogin }: { onLogin: (s: Session) => void }) {
           </>
         )}
         <label className="mb-1 block text-sm text-white/70" htmlFor="password">
-          密码{mode === 'register' ? '（至少 8 位）' : ''}
+          密码{mode === 'register' ? '（至少 6 位）' : ''}
         </label>
         <input
           id="password"

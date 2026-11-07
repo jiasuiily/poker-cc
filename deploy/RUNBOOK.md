@@ -27,25 +27,39 @@ ping poker.example.com
 用 SSH 登录服务器（推荐用密钥登录，不用密码）：
 
 ```bash
-ssh root@服务器IP
+ssh admin@服务器IP
 ```
 
-更新系统，打开防火墙，只放行 SSH、HTTP、HTTPS：
+> 下面按普通用户（如阿里云轻量服务器的 `admin`）加 `sudo` 写；用 root 登录时去掉 `sudo` 即可。
+
+更新系统，打开防火墙，只放行 SSH、HTTP、HTTPS（升级后若提示 `System restart required`，执行 `sudo reboot`）：
 
 ```bash
-apt update && apt upgrade -y
+sudo apt update && sudo apt upgrade -y
 ```
 
 ```bash
-ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp && ufw allow 443/udp && ufw --force enable
+sudo ufw allow 22/tcp && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sudo ufw allow 443/udp && sudo ufw --force enable
 ```
 
-> 云厂商控制台里通常还有一层「安全组 / 防火墙」，那里也要放行 80 和 443。
+> 云厂商控制台里通常还有一层「安全组 / 防火墙」，那里也要放行 80 和 443（以及 UDP 443）。
+
+内存 2GB 以下时加 2GB 交换空间，避免构建镜像时内存不足：
+
+```bash
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile && echo "/swapfile none swap sw 0 0" | sudo tee -a /etc/fstab
+```
 
 ## 3. 安装 Docker
 
 ```bash
-curl -fsSL https://get.docker.com | sh
+curl -fsSL https://get.docker.com | sudo sh
+```
+
+让当前用户不用 `sudo` 也能运行 docker（执行后退出 SSH 重新登录才生效）：
+
+```bash
+sudo usermod -aG docker $USER
 ```
 
 ```bash
@@ -53,6 +67,10 @@ docker --version && docker compose version
 ```
 
 ## 4. 拉取代码
+
+```bash
+sudo mkdir -p /opt/poker-cc && sudo chown $USER:$USER /opt/poker-cc
+```
 
 ```bash
 git clone https://github.com/jiasuiily/poker-cc.git /opt/poker-cc

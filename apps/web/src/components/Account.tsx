@@ -42,7 +42,7 @@ export function Account({ session, onBack, onSession }: { session: Session; onBa
       <form onSubmit={submit} className="rounded-xl bg-felt-dark p-4 ring-1 ring-white/10">
         <h2 className="mb-3 font-semibold">修改密码</h2>
         <input type="password" autoComplete="current-password" aria-label="原密码" placeholder="原密码" value={oldPw} onChange={(e) => setOldPw(e.target.value)} className={input} />
-        <input type="password" autoComplete="new-password" aria-label="新密码" placeholder="新密码（至少 8 位）" value={newPw} onChange={(e) => setNewPw(e.target.value)} className={input} />
+        <input type="password" autoComplete="new-password" aria-label="新密码" placeholder="新密码（至少 6 位）" value={newPw} onChange={(e) => setNewPw(e.target.value)} className={input} />
         <input type="password" autoComplete="new-password" aria-label="再输入一次新密码" placeholder="再输入一次新密码" value={again} onChange={(e) => setAgain(e.target.value)} className={input} />
         {msg && (
           <p className={`mb-3 text-sm ${msg.ok ? 'text-emerald-300' : 'text-red-300'}`} role="status">

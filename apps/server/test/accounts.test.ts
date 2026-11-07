@@ -79,9 +79,13 @@ describe('registration', () => {
     expect(row!.usedBy).toBeNull();
   });
 
-  it('requires passwords of at least 8 characters', async () => {
+  it('requires passwords of at least 6 characters, any kind', async () => {
     const { db, codes } = await setup();
-    expect(await status(register(db, { username: 'dave', displayName: 'Dave', password: 'short', inviteCode: codes[0]! }))).toBe(400);
+    expect(await status(register(db, { username: 'dave', displayName: 'Dave', password: '12345', inviteCode: codes[0]! }))).toBe(400);
+    const digits = await register(db, { username: 'dave', displayName: 'Dave', password: '123456', inviteCode: codes[0]! });
+    expect(digits.username).toBe('dave');
+    const letters = await register(db, { username: 'dora', displayName: 'Dora', password: 'abcdef', inviteCode: codes[1]! });
+    expect(letters.username).toBe('dora');
   });
 });
 

@@ -30,7 +30,7 @@ export async function runCli(argv: string[], db: Db, io: CliIo): Promise<number>
     switch (cmd) {
       case 'create-admin': {
         if (!args[0]) break;
-        const pw = await io.prompt('密码（至少 8 位）：', true);
+        const pw = await io.prompt('密码（至少 6 位）：', true);
         const again = await io.prompt('再输入一次：', true);
         if (pw !== again) {
           io.print('两次输入的密码不一致');

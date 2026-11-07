@@ -23,10 +23,10 @@ export function sanitizeDisplayName(raw: unknown): string {
   return s;
 }
 
-/** 8–128 characters. */
+/** 6–128 characters of any kind. */
 export function validatePassword(raw: unknown): string {
   const s = String(raw ?? '');
-  if (s.length < 8) throw new HttpError(400, '密码至少 8 位');
+  if (s.length < 6) throw new HttpError(400, '密码至少 6 位');
   if (s.length > 128) throw new HttpError(400, '密码太长');
   return s;
 }

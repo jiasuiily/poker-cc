@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { issueToken } from '../auth.js';
 import { normalizeUsername } from '../accounts/names.js';
 import { changePassword, getAccount, login, register, type Account } from '../accounts/service.js';
+import { recordLogin } from '../accounts/activity.js';
 import { HttpError } from '../http.js';
 import type { ApiDeps } from './index.js';
 import { requireUser, userOf } from './middleware.js';
@@ -18,7 +19,9 @@ export function authRoutes(deps: ApiDeps): Router {
   const r = Router();
 
   r.post('/register', async (req, res) => {
-    const a = await register(await deps.db(), req.body ?? {});
+    const db = await deps.db();
+    const a = await register(db, req.body ?? {});
+    await recordLogin(db, a.id);
     res.json(await session(a));
   });
 
@@ -31,8 +34,10 @@ export function authRoutes(deps: ApiDeps): Router {
       throw new HttpError(429, `登录失败次数过多，请 ${minutes} 分钟后再试`);
     }
     try {
-      const a = await login(await deps.db(), { username, password: req.body?.password });
+      const db = await deps.db();
+      const a = await login(db, { username, password: req.body?.password });
       deps.limiter.success([`user:${username}`]);
+      await recordLogin(db, a.id);
       res.json(await session(a));
     } catch (e) {
       if (e instanceof HttpError && e.status === 401) deps.limiter.fail(keys);

@@ -3,6 +3,7 @@ import { Room, type Client } from '@colyseus/core';
 import type { PlayerAction } from '@poker/core';
 import type { BotLevel, StyleId } from '@poker/ai';
 import { verifyToken, type AuthUser } from '../auth.js';
+import { tableJoined, tableLeft, touchSeen } from '../accounts/activity.js';
 import { getDb } from '../db/client.js';
 import { saveHand } from '../history/repo.js';
 import { trackSave } from '../persistence.js';
@@ -140,10 +141,15 @@ export class TableRoom extends Room<{ metadata: TableMetadata; client: PokerClie
     this.idleTimer?.();
     this.idleTimer = null;
     this.actor.setConnected(client.auth!.playerId, true);
+    tableJoined(client.auth!.playerId);
+    void getDb()
+      .then((db) => touchSeen(db, client.auth!.playerId))
+      .catch((e) => console.error('touchSeen failed', e));
     client.send('state', this.actor.viewFor(client.auth!.playerId));
   }
 
   onLeave(client: PokerClient) {
+    tableLeft(client.auth!.playerId);
     const stillHere = this.clients.some((c) => c !== client && (c as PokerClient).auth?.playerId === client.auth!.playerId);
     if (!stillHere) this.actor.setConnected(client.auth!.playerId, false);
     if (this.clients.length === 0) {

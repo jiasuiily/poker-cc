@@ -1,5 +1,5 @@
 import { desc, sql } from 'drizzle-orm';
-import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 /** Spec 4.2. Column names are snake_case in SQL, camelCase in TS. */
 
@@ -17,6 +17,10 @@ export const players = pgTable('players', {
   /** Bumped on password reset/change; tokens carrying an older version are rejected. */
   tokenVersion: integer('token_version').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  loginCount: integer('login_count').notNull().default(0),
+  /** Written at most once a minute per player (see accounts/activity.ts). */
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
 });
 
 /** Single-use registration codes, created by an admin (CLI or admin page). */
@@ -89,7 +93,24 @@ export const llmUsage = pgTable(
     playerId: text('player_id').notNull(),
     /** YYYY-MM-DD in Asia/Shanghai */
     day: text('day').notNull(),
+    /** Which quota: 'hand' (single-hand commentary), 'batch', 'report'. */
+    kind: text('kind').notNull().default('hand'),
     count: integer('count').notNull().default(0),
   },
-  (t) => [primaryKey({ columns: [t.playerId, t.day] })],
+  (t) => [primaryKey({ columns: [t.playerId, t.day, t.kind] })],
+);
+
+/** Overall coaching reports; at most one pending per player. */
+export const coachReports = pgTable(
+  'coach_reports',
+  {
+    id: text('id').primaryKey(),
+    playerId: text('player_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    /** pending | ok | failed */
+    status: text('status').notNull(),
+    stats: jsonb('stats').notNull(),
+    text: text('text'),
+  },
+  (t) => [uniqueIndex('coach_reports_one_pending').on(t.playerId).where(sql`${t.status} = 'pending'`)],
 );

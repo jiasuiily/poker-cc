@@ -39,7 +39,7 @@ async function takeQuota(db: Db, playerId: string, limit: number): Promise<boole
   const [row] = await db
     .insert(llmUsage)
     .values({ playerId, day, count: 1 })
-    .onConflictDoUpdate({ target: [llmUsage.playerId, llmUsage.day], set: { count: sql`${llmUsage.count} + 1` } })
+    .onConflictDoUpdate({ target: [llmUsage.playerId, llmUsage.day, llmUsage.kind], set: { count: sql`${llmUsage.count} + 1` } })
     .returning({ count: llmUsage.count });
   return (row?.count ?? 1) <= limit;
 }

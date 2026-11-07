@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { verifyToken, type AuthUser } from '../auth.js';
+import { touchSeen } from '../accounts/activity.js';
 import { HttpError } from '../http.js';
 import type { ApiDeps } from './index.js';
 
@@ -10,7 +11,9 @@ export function requireUser(deps: ApiDeps) {
   return async (req: Request, res: Response, next: NextFunction) => {
     let user: AuthUser;
     try {
-      user = await verifyToken(bearer(req), await deps.db());
+      const db = await deps.db();
+      user = await verifyToken(bearer(req), db);
+      touchSeen(db, user.playerId).catch((e) => console.error('touchSeen failed', e));
     } catch (e) {
       if (e instanceof Error && /token|jwt|JWS|exp|signature|missing/i.test(e.message)) {
         return next(new HttpError(401, '登录已过期，请重新登录'));

@@ -54,7 +54,7 @@ export function classifyLeak(d: DecisionReport): LeakKind | null {
   const r = d.recommended;
   if (d.street === 'preflop') {
     if ((h.kind === 'call' || h.kind === 'raise') && r.kind === 'fold') return 'preflopLoose';
-    if (h.kind === 'fold' && r.kind === 'call') return 'preflopTight';
+    if (h.kind === 'fold' && (r.kind === 'call' || r.kind === 'raise')) return 'preflopTight';
   }
   if (h.kind === 'raise' && r.kind === 'raise' && h.to !== r.to) return 'sizing';
   if (h.kind === 'raise') return 'aggressive';

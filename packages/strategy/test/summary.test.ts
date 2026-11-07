@@ -26,6 +26,7 @@ describe('classifyLeak', () => {
     expect(classifyLeak(dec('preflop', call, fold, 'mistake', 3))).toBe('preflopLoose');
     expect(classifyLeak(dec('preflop', raise(30), fold, 'mistake', 3))).toBe('preflopLoose');
     expect(classifyLeak(dec('preflop', fold, call, 'mistake', 3))).toBe('preflopTight');
+    expect(classifyLeak(dec('preflop', fold, raise(60), 'mistake', 3))).toBe('preflopTight');
   });
   it('classifies postflop', () => {
     expect(classifyLeak(dec('flop', call, fold, 'mistake', 3))).toBe('callTooWide');

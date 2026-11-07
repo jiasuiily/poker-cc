@@ -4,7 +4,7 @@
  */
 import { createInterface } from 'node:readline';
 import { eq } from 'drizzle-orm';
-import { adminResetPassword, createAdmin, createInvites, promote } from './accounts/service.js';
+import { adminResetPassword, createAdmin, createInvites, createPermanentInvite, promote, revokeInvite } from './accounts/service.js';
 import { normalizeUsername } from './accounts/names.js';
 import { createDb, type Db } from './db/client.js';
 import { players } from './db/schema.js';
@@ -20,6 +20,8 @@ const USAGE = [
   '  create-admin <用户名> [显示名]   创建管理员（会提示输入两次密码）',
   '  promote <用户名>                 把已有账号设为管理员',
   '  invite [数量] [有效天数]         生成邀请码（默认 1 个，不过期）',
+  '  invite-permanent <邀请码>        设置一个可重复使用、永不过期的邀请码',
+  '  invite-revoke <邀请码>           让邀请码立即失效',
   '  reset-password <用户名>          重置密码，打印临时密码',
 ];
 
@@ -53,6 +55,17 @@ export async function runCli(argv: string[], db: Db, io: CliIo): Promise<number>
         for (const c of codes) io.print(c);
         return 0;
       }
+      case 'invite-permanent': {
+        if (!args[0]) break;
+        const code = await createPermanentInvite(db, args[0]);
+        io.print(`邀请码 ${code} 可重复使用、永不过期（停用：invite-revoke ${code}）`);
+        return 0;
+      }
+      case 'invite-revoke':
+        if (!args[0]) break;
+        await revokeInvite(db, args[0]);
+        io.print(`邀请码 ${args[0].trim().toUpperCase()} 已失效`);
+        return 0;
       case 'reset-password': {
         if (!args[0]) break;
         const [row] = await db.select({ id: players.id }).from(players).where(eq(players.username, normalizeUsername(args[0])));

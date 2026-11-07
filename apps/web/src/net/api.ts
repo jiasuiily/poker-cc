@@ -89,6 +89,8 @@ export interface InviteRow {
   expiresAt: string | null;
   usedBy: string | null;
   usedAt: string | null;
+  reusable: boolean;
+  uses: number;
 }
 
 export interface UserRow {

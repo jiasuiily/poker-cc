@@ -15,6 +15,13 @@
       "when": 1794039134514,
       "tag": "0001_mysterious_mikhail_rasputin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794054648773,
+      "tag": "0002_old_darkstar",
+      "breakpoints": true
     }
   ]
 }

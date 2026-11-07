@@ -47,10 +47,21 @@ export async function register(
   const id = `p_${randomUUID()}`;
   try {
     return await db.transaction(async (tx) => {
+      // One atomic statement: a one-time code records who used it; a reusable one only counts uses.
       const used = await tx
         .update(inviteCodes)
-        .set({ usedBy: id, usedAt: new Date() })
-        .where(and(eq(inviteCodes.code, code), isNull(inviteCodes.usedBy), or(isNull(inviteCodes.expiresAt), gt(inviteCodes.expiresAt, sql`now()`))))
+        .set({
+          usedBy: sql`case when ${inviteCodes.reusable} then ${inviteCodes.usedBy} else ${id} end`,
+          usedAt: new Date(),
+          uses: sql`${inviteCodes.uses} + 1`,
+        })
+        .where(
+          and(
+            eq(inviteCodes.code, code),
+            or(eq(inviteCodes.reusable, true), isNull(inviteCodes.usedBy)),
+            or(isNull(inviteCodes.expiresAt), gt(inviteCodes.expiresAt, sql`now()`)),
+          ),
+        )
         .returning({ code: inviteCodes.code });
       if (used.length === 0) throw new HttpError(400, '邀请码无效、已过期或已被使用');
       const [row] = await tx.insert(players).values({ id, nickname: displayName, username, passwordHash }).returning();
@@ -116,9 +127,35 @@ export async function createInvites(db: Db, createdBy: string | null, count: num
   return codes;
 }
 
+/** CLI: create (or re-enable) a reusable, never-expiring code with a chosen text. */
+export async function createPermanentInvite(db: Db, raw: string): Promise<string> {
+  const code = raw.trim().toUpperCase();
+  if (!/^[A-Z0-9]{4,32}$/.test(code)) throw new HttpError(400, '邀请码须为 4–32 位字母或数字');
+  await db
+    .insert(inviteCodes)
+    .values({ code, createdBy: null, expiresAt: null, reusable: true })
+    .onConflictDoUpdate({ target: inviteCodes.code, set: { reusable: true, expiresAt: null } });
+  return code;
+}
+
+/** CLI: make a code unusable from now on (it stays in the list). */
+export async function revokeInvite(db: Db, raw: string): Promise<void> {
+  const code = raw.trim().toUpperCase();
+  const r = await db.update(inviteCodes).set({ expiresAt: sql`now()` }).where(eq(inviteCodes.code, code)).returning({ code: inviteCodes.code });
+  if (r.length === 0) throw new HttpError(404, '没有这个邀请码');
+}
+
 export async function listInvites(db: Db) {
   return db
-    .select({ code: inviteCodes.code, createdAt: inviteCodes.createdAt, expiresAt: inviteCodes.expiresAt, usedBy: players.nickname, usedAt: inviteCodes.usedAt })
+    .select({
+      code: inviteCodes.code,
+      createdAt: inviteCodes.createdAt,
+      expiresAt: inviteCodes.expiresAt,
+      usedBy: players.nickname,
+      usedAt: inviteCodes.usedAt,
+      reusable: inviteCodes.reusable,
+      uses: inviteCodes.uses,
+    })
     .from(inviteCodes)
     .leftJoin(players, eq(players.id, inviteCodes.usedBy))
     .orderBy(desc(inviteCodes.createdAt))

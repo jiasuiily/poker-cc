@@ -27,6 +27,9 @@ export const inviteCodes = pgTable('invite_codes', {
   expiresAt: timestamp('expires_at', { withTimezone: true }),
   usedBy: text('used_by'),
   usedAt: timestamp('used_at', { withTimezone: true }),
+  /** Reusable codes stay valid after use (until revoked or expired); `uses` counts registrations. */
+  reusable: boolean('reusable').notNull().default(false),
+  uses: integer('uses').notNull().default(0),
 });
 
 export const hands = pgTable('hands', {

@@ -97,7 +97,13 @@ export function Admin({ session, onBack }: { session: Session; onBack: () => voi
                   <td className="py-1 pr-3 font-mono">{i.code}</td>
                   <td className="py-1 pr-3">{fmt(i.createdAt)}</td>
                   <td className="py-1 pr-3">{fmt(i.expiresAt)}</td>
-                  <td className="py-1">{i.usedBy ?? <span className="text-white/40">未使用</span>}</td>
+                  <td className="py-1">
+                    {i.reusable ? (
+                      <span className="text-emerald-300">可重复使用 · 已注册 {i.uses} 人</span>
+                    ) : (
+                      (i.usedBy ?? <span className="text-white/40">未使用</span>)
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

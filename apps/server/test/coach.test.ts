@@ -155,6 +155,20 @@ describe('createReport', () => {
     }
   });
 
+  it('yields to the event loop while catching up on unanalysed hands', async () => {
+    const db = await setup();
+    const { llm } = fakeLlm();
+    let ticks = 0;
+    const timer = setInterval(() => ticks++, 0);
+    try {
+      await (await createReport(db, llm, 'p0')).job;
+    } finally {
+      clearInterval(timer);
+    }
+    // 12 hands were analysed; each is followed by a macrotask yield, so timers must have run.
+    expect(ticks).toBeGreaterThanOrEqual(5);
+  });
+
   it('hands analysed lazily: no prior analysis rows needed', async () => {
     const db = await setup();
     await ensureLocalAnalysis(db, 'c1-1', 'p0');

@@ -4,7 +4,7 @@ import { summarizeDecisions, type PlayerStats } from '@poker/strategy';
 import type { Db } from '../db/client.js';
 import { coachReports } from '../db/schema.js';
 import { HttpError } from '../http.js';
-import { ensureLocalAnalysis, handsLackingAnalysis } from '../analysis/service.js';
+import { ensureAllLocalAnalysis, handsLackingAnalysis } from '../analysis/service.js';
 import { takeQuota } from '../analysis/quota.js';
 import { loadHandForPlayer } from '../history/repo.js';
 import { sanitizeLlmText, type LlmClient } from '../llm.js';
@@ -52,13 +52,7 @@ export async function createReport(
   if (!llm) throw new HttpError(503, '未配置大模型');
 
   // Local analysis only (never the model) for hands without a current-version analysis.
-  for (const id of await handsLackingAnalysis(db, playerId)) {
-    try {
-      await ensureLocalAnalysis(db, id, playerId);
-    } catch (e) {
-      console.error(`[report ${playerId}] local analysis of ${id} failed`, e);
-    }
-  }
+  await ensureAllLocalAnalysis(db, playerId, await handsLackingAnalysis(db, playerId), 'report');
   const stats = summarizeDecisions(await loadDecisionInputs(db, playerId));
   if (stats.decisions < MIN_REPORT_DECISIONS) throw new HttpError(400, `再多打几手（至少 ${MIN_REPORT_DECISIONS} 个决策点）`);
 

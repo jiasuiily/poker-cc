@@ -28,7 +28,24 @@ export async function handsLackingAnalysis(db: Db, playerId: string): Promise<st
   return (await playerHandIds(db, playerId)).filter((id) => !have.has(id));
 }
 
-export type LlmStatus ='pending' | 'ok' | 'failed' | 'disabled' | 'limited';
+const tick = () => new Promise<void>((r) => setImmediate(r));
+
+/**
+ * Local analysis (step 1) for the given hands, yielding to the event loop after each one so a
+ * long catch-up cannot starve table timers. Failures are logged under `label` and skipped.
+ */
+export async function ensureAllLocalAnalysis(db: Db, playerId: string, handIds: string[], label: string): Promise<void> {
+  for (const id of handIds) {
+    try {
+      await ensureLocalAnalysis(db, id, playerId);
+    } catch (e) {
+      console.error(`[${label} ${playerId}] local analysis of ${id} failed`, e);
+    }
+    await tick();
+  }
+}
+
+export type LlmStatus = 'pending' | 'ok' | 'failed' | 'disabled' | 'limited';
 
 export interface AnalysisResponse {
   decisions: DecisionReport[];

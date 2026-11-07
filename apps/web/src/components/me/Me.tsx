@@ -126,7 +126,7 @@ export function Me({ session, onAuthExpired }: { session: Session; onAuthExpired
         )}
       </section>
 
-      <BatchPanel session={session} unanalyzed={stats?.unanalyzed ?? 0} onAuthExpired={onAuthExpired} onFinished={refresh} />
+      <BatchPanel session={session} onAuthExpired={onAuthExpired} onFinished={refresh} />
       <ReportsPanel session={session} onAuthExpired={onAuthExpired} />
     </div>
   );

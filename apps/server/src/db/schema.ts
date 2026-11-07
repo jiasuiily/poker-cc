@@ -1,12 +1,32 @@
 import { desc, sql } from 'drizzle-orm';
-import { index, integer, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 
 /** Spec 4.2. Column names are snake_case in SQL, camelCase in TS. */
 
+/**
+ * Accounts. `nickname` is the display name shown at tables (kept unique so two people
+ * never look the same). `username` is the login name, stored NFC-normalised and lower-cased.
+ * Rows from the phase-2 nickname login have no username/password and cannot log in.
+ */
 export const players = pgTable('players', {
   id: text('id').primaryKey(),
   nickname: text('nickname').notNull().unique(),
+  username: text('username').unique(),
+  passwordHash: text('password_hash'),
+  isAdmin: boolean('is_admin').notNull().default(false),
+  /** Bumped on password reset/change; tokens carrying an older version are rejected. */
+  tokenVersion: integer('token_version').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+/** Single-use registration codes, created by an admin (CLI or admin page). */
+export const inviteCodes = pgTable('invite_codes', {
+  code: text('code').primaryKey(),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  usedBy: text('used_by'),
+  usedAt: timestamp('used_at', { withTimezone: true }),
 });
 
 export const hands = pgTable('hands', {

@@ -1,4 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose';
+import { getAccount } from './accounts/service.js';
+import type { Db } from './db/client.js';
 
 const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? 'dev-only-secret-change-me');
 if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
@@ -7,12 +9,14 @@ if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
 
 export interface AuthUser {
   playerId: string;
+  /** Display name shown at tables. */
   name: string;
+  isAdmin: boolean;
 }
 
-/** Sign a 7-day token for a player (the id always comes from the players table). */
-export async function issueToken(user: AuthUser): Promise<string> {
-  return new SignJWT({ name: user.name })
+/** 7-day token; `ver` must match the account's token_version (password changes revoke tokens). */
+export async function issueToken(user: { playerId: string; name: string; ver: number }): Promise<string> {
+  return new SignJWT({ name: user.name, ver: user.ver })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(user.playerId)
     .setIssuedAt()
@@ -20,19 +24,15 @@ export async function issueToken(user: AuthUser): Promise<string> {
     .sign(secret);
 }
 
-export async function verifyToken(token: unknown): Promise<AuthUser> {
+/**
+ * Verify signature and expiry, then check the account still exists, has a password and
+ * the token version is current. The display name comes from the database, not the token.
+ */
+export async function verifyToken(token: unknown, db: Db): Promise<AuthUser> {
   if (typeof token !== 'string' || !token) throw new Error('missing token');
   const { payload } = await jwtVerify(token, secret, { algorithms: ['HS256'] });
-  if (!payload.sub || typeof payload.name !== 'string') throw new Error('bad token');
-  // Only nickname-login ids: old anonymous tokens could show a name that now belongs to someone else.
-  if (!payload.sub.startsWith('p_')) throw new Error('token expired: please log in again');
-  return { playerId: payload.sub, name: payload.name };
-}
-
-/** Trimmed, 1–16 characters, no control characters or angle brackets. Rejects rather than truncates. */
-export function sanitizeName(raw: unknown): string {
-  const s = String(raw ?? '').replace(/[\u0000-\u001f<>]/g, '').trim();
-  if (!s) throw new Error('昵称不能为空');
-  if ([...s].length > 16) throw new Error('昵称最多 16 个字');
-  return s;
+  if (!payload.sub || typeof payload.ver !== 'number') throw new Error('token expired: please log in again');
+  const acc = await getAccount(db, payload.sub);
+  if (!acc || acc.tokenVersion !== payload.ver) throw new Error('token expired: please log in again');
+  return { playerId: acc.id, name: acc.displayName, isAdmin: acc.isAdmin };
 }

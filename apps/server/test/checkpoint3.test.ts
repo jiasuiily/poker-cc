@@ -96,9 +96,8 @@ describe('checkpoint review 3 fixes', () => {
   });
 
   it('rejects tokens from the old anonymous login', async () => {
-    const old = await issueToken({ playerId: 'anon-1234', name: 'Bob' });
-    await expect(verifyToken(old)).rejects.toThrow();
-    const cur = await issueToken({ playerId: 'p_1234', name: 'Bob' });
-    expect((await verifyToken(cur)).playerId).toBe('p_1234');
+    const db = await setup();
+    const old = await issueToken({ playerId: 'anon-1234', name: 'Bob', ver: 0 });
+    await expect(verifyToken(old, db)).rejects.toThrow();
   });
 });

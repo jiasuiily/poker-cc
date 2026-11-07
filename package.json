@@ -8,7 +8,8 @@
     "sim": "tsx packages/ai/scripts/sim.ts",
     "sim:ai": "tsx packages/ai/scripts/sim-ai.ts",
     "dev:server": "pnpm --filter @poker/server dev",
-    "dev:web": "pnpm --filter @poker/web dev"
+    "dev:web": "pnpm --filter @poker/web dev",
+    "test:perf": "vitest run -t \"ms\" packages/strategy/test/equity.test.ts packages/ai/test/advanced.test.ts"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

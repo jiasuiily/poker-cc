@@ -48,7 +48,7 @@ describe('advanced bot', () => {
     }
   });
 
-  it('decides a flop spot in < 30 ms (median)', () => {
+  it.runIf(process.env.npm_lifecycle_event === 'test:perf')('decides a flop spot in < 30 ms', () => {
     const bot = makeAdvancedBot(BOT_STYLES.tag);
     const times: number[] = [];
     for (let i = 0; i < 10; i++) {

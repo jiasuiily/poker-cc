@@ -1,17 +1,26 @@
 import { useEffect, useState } from 'react';
-import { loadSession, saveSession, type Session } from './net/api';
+import { AUTH_EXPIRED_EVENT, loadSession, saveSession, type Session } from './net/api';
 import { Login } from './components/Login';
 import { Lobby } from './components/Lobby';
 import { TablePage } from './components/TablePage';
 import { Replay } from './components/Replay';
+import { Account } from './components/Account';
+import { Admin } from './components/Admin';
 
-type Route = { kind: 'lobby'; tab: 'tables' | 'history' } | { kind: 'table'; id: string } | { kind: 'hand'; id: string };
+type Route =
+  | { kind: 'lobby'; tab: 'tables' | 'history' }
+  | { kind: 'table'; id: string }
+  | { kind: 'hand'; id: string }
+  | { kind: 'account' }
+  | { kind: 'admin' };
 
 function parseHash(): Route {
   const t = location.hash.match(/^#\/table\/([\w-]+)/);
   if (t) return { kind: 'table', id: t[1]! };
   const h = location.hash.match(/^#\/hand\/([\w-]+)/);
   if (h) return { kind: 'hand', id: h[1]! };
+  if (location.hash === '#/account') return { kind: 'account' };
+  if (location.hash === '#/admin') return { kind: 'admin' };
   return { kind: 'lobby', tab: location.hash === '#/history' ? 'history' : 'tables' };
 }
 
@@ -21,8 +30,17 @@ export function App() {
 
   useEffect(() => {
     const onHash = () => setRoute(parseHash());
+    // Any 401 on an authenticated request: back to the login page.
+    const onExpired = () => {
+      saveSession(null);
+      setSession(null);
+    };
     window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
+    window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+    return () => {
+      window.removeEventListener('hashchange', onHash);
+      window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+    };
   }, []);
 
   const login = (s: Session) => {
@@ -35,6 +53,8 @@ export function App() {
   };
 
   if (!session) return <Login onLogin={login} />;
+  if (route.kind === 'account') return <Account session={session} onBack={() => (location.hash = '')} onSession={login} />;
+  if (route.kind === 'admin' && session.isAdmin) return <Admin session={session} onBack={() => (location.hash = '')} />;
   if (route.kind === 'table')
     return <TablePage key={route.id} roomId={route.id} session={session} onExit={() => (location.hash = '')} onAuthExpired={logout} />;
   if (route.kind === 'hand')
@@ -42,7 +62,7 @@ export function App() {
   return (
     <Lobby
       session={session}
-      tab={route.tab}
+      tab={route.kind === 'lobby' ? route.tab : 'tables'}
       onTab={(t) => (location.hash = t === 'history' ? '/history' : '')}
       onJoin={(id) => (location.hash = `/table/${id}`)}
       onOpenHand={(id) => (location.hash = `/hand/${id}`)}

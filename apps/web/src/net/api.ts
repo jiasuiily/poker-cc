@@ -9,8 +9,14 @@ export const PROTOCOL_VERSION = 1;
 export interface Session {
   token: string;
   playerId: string;
+  /** Display name. */
   name: string;
+  username: string;
+  isAdmin: boolean;
 }
+
+/** Fired when any authenticated request gets 401; App logs the user out. */
+export const AUTH_EXPIRED_EVENT = 'poker:auth-expired';
 
 const KEY = 'poker.session';
 
@@ -41,13 +47,26 @@ async function call<T>(path: string, init?: RequestInit & { token?: string }): P
     },
   });
   const body = await res.json().catch(() => ({}));
+  if (res.status === 401 && init?.token) window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
   if (!res.ok) throw new HttpError(res.status, body.error ?? `请求失败 (${res.status})`);
   return body as T;
 }
 
 export const api = {
-  loginNickname: (nickname: string) =>
-    call<Session>('/api/auth/nickname', { method: 'POST', body: JSON.stringify({ nickname }) }),
+  login: (username: string, password: string) =>
+    call<Session>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  register: (input: { username: string; displayName: string; password: string; inviteCode: string }) =>
+    call<Session>('/api/auth/register', { method: 'POST', body: JSON.stringify(input) }),
+  changePassword: (token: string, oldPassword: string, newPassword: string) =>
+    call<Session>('/api/auth/password', { method: 'POST', body: JSON.stringify({ oldPassword, newPassword }), token }),
+  admin: {
+    invites: (token: string) => call<InviteRow[]>('/api/admin/invites', { token }),
+    createInvites: (token: string, count: number, expiresInDays: number | null) =>
+      call<{ codes: string[] }>('/api/admin/invites', { method: 'POST', body: JSON.stringify({ count, expiresInDays }), token }),
+    users: (token: string) => call<UserRow[]>('/api/admin/users', { token }),
+    resetPassword: (token: string, id: string) =>
+      call<{ password: string }>(`/api/admin/users/${encodeURIComponent(id)}/reset-password`, { method: 'POST', token }),
+  },
   listTables: () => call<TableListing[]>('/api/tables'),
   createTable: (token: string, opts: CreateTableOptions) =>
     call<{ roomId: string }>('/api/tables', { method: 'POST', body: JSON.stringify(opts), token }),
@@ -58,6 +77,22 @@ export const api = {
     call<AnalysisResponse>(`/api/hands/${encodeURIComponent(id)}/analysis`, { method: 'POST', token }),
   getAnalysis: (token: string, id: string) => call<AnalysisResponse>(`/api/hands/${encodeURIComponent(id)}/analysis`, { token }),
 };
+
+export interface InviteRow {
+  code: string;
+  createdAt: string;
+  expiresAt: string | null;
+  usedBy: string | null;
+  usedAt: string | null;
+}
+
+export interface UserRow {
+  id: string;
+  username: string;
+  displayName: string;
+  isAdmin: boolean;
+  createdAt: string;
+}
 
 export class HttpError extends Error {
   constructor(public status: number, message: string) {

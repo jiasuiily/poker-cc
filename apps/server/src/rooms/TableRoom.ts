@@ -114,7 +114,7 @@ export class TableRoom extends Room<{ metadata: TableMetadata; client: PokerClie
 
   async onAuth(_client: Client, options: { token?: string; protocol?: number }) {
     if (options?.protocol !== PROTOCOL_VERSION) throw new Error('客户端版本过旧，请刷新页面');
-    return verifyToken(options.token);
+    return verifyToken(options.token, await getDb());
   }
 
   onJoin(client: PokerClient) {

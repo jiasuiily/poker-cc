@@ -73,6 +73,14 @@ export function Lobby({ session, tab, onTab, onJoin, onOpenHand, onLogout }: Lob
         <h1 className="text-xl font-bold">大厅</h1>
         <div className="flex items-center gap-3 text-sm">
           <span className="text-white/70">{session.name}</span>
+          <a href="#/account" className="rounded-md px-2 py-1 text-white/60 ring-1 ring-white/15 hover:text-white">
+            账号
+          </a>
+          {session.isAdmin && (
+            <a href="#/admin" className="rounded-md px-2 py-1 text-white/60 ring-1 ring-white/15 hover:text-white">
+              管理
+            </a>
+          )}
           <button onClick={onLogout} className="rounded-md px-2 py-1 text-white/60 ring-1 ring-white/15 hover:text-white">
             退出
           </button>

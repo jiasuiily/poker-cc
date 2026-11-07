@@ -18,6 +18,7 @@ async function start() {
     db: async () => db,
     llm: null,
     llmDailyLimit: 30,
+    llmBatchDailyLimit: 200,
     limiter: new LoginLimiter(),
     listTables: async () => [],
     createTable: async () => 'room1',

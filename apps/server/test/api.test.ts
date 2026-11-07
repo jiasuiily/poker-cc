@@ -17,6 +17,7 @@ async function start(over: Partial<ApiDeps> = {}) {
     db: async () => db,
     llm: null,
     llmDailyLimit: 30,
+    llmBatchDailyLimit: 200,
     limiter: new LoginLimiter(),
     listTables: async () => [],
     createTable: async (opts) => {

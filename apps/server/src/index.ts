@@ -21,6 +21,7 @@ const gameServer = new Server({
       db: getDb,
       llm: createLlmClient(process.env),
       llmDailyLimit: Math.max(0, Number(process.env.LLM_DAILY_LIMIT ?? 30) || 0),
+      llmBatchDailyLimit: Math.max(0, Number(process.env.LLM_BATCH_DAILY_LIMIT ?? 200) || 0),
       limiter: new LoginLimiter(),
       listTables: async () =>
         (await matchMaker.query({ name: 'table' })).map((r) => ({ roomId: r.roomId, clients: r.clients, ...(r.metadata as TableMetadata) })),

@@ -7,7 +7,9 @@ import type { LlmClient } from '../llm.js';
 import type { TableRoomOptions } from '../rooms/TableRoom.js';
 import { adminRoutes } from './admin.js';
 import { authRoutes, meRoute } from './auth.js';
+import { BatchRunner } from '../analysis/batch.js';
 import { handRoutes } from './hands.js';
+import { meRoutes } from './me.js';
 import { tableRoutes } from './tables.js';
 
 /** Everything the HTTP API needs; injected so tests can use an in-memory DB and stub rooms. */
@@ -15,6 +17,7 @@ export interface ApiDeps {
   db: () => Promise<Db>;
   llm: LlmClient | null;
   llmDailyLimit: number;
+  llmBatchDailyLimit: number;
   limiter: LoginLimiter;
   listTables: () => Promise<unknown[]>;
   createTable: (opts: TableRoomOptions) => Promise<string>;
@@ -43,6 +46,8 @@ export function mountApi(app: Application, deps: ApiDeps): void {
   });
   app.use('/api/auth', authRoutes(deps));
   app.use('/api/me', meRoute(deps));
+  const runner = new BatchRunner({ db: deps.db, llm: deps.llm, dailyLimit: deps.llmBatchDailyLimit });
+  app.use('/api/me', meRoutes(deps, runner));
   app.use('/api/admin', adminRoutes(deps));
   app.use('/api/tables', tableRoutes(deps));
   app.use('/api/hands', handRoutes(deps));

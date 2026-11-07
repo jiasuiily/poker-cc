@@ -20,6 +20,7 @@ async function serve(deps: Partial<ApiDeps>, webDir?: string) {
     db: async () => db,
     llm: null,
     llmDailyLimit: 30,
+    llmBatchDailyLimit: 200,
     limiter: new LoginLimiter(),
     listTables: async () => [],
     createTable: async () => 'r',

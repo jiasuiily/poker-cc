@@ -88,15 +88,32 @@ describe('BatchRunner', () => {
     expect(calls).toHaveLength(4);
   });
 
-  it('does not double-call a hand requested at the same time', async () => {
+  it('does not double-call a hand clicked while the batch is explaining it', async () => {
     const db = await setup();
-    const { llm, calls } = fakeLlm();
+    const calls: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((res) => (release = res));
+    const llm: LlmClient = {
+      async explain(_s, user) {
+        calls.push(user);
+        await gate;
+        return '解说';
+      },
+    };
     const r = runner(db, llm);
     await r.start('p0');
+    // Newest hand (t1-4) is explained first; wait until its call is in flight.
+    for (let i = 0; i < 500 && calls.length < 1; i++) await new Promise((res) => setTimeout(res, 10));
+    expect(calls).toHaveLength(1);
     const res = await requestAnalysis(db, llm, 't1-4', 'p0', { dailyLimit: 30 });
-    if (res.status === 'ok') await res.job;
+    if (res.status !== 'ok') throw new Error(res.status);
+    expect(res.analysis.llmStatus).toBe('pending');
+    expect(res.job).toBeUndefined();
+    expect(calls).toHaveLength(1);
+    release();
     await r.idle('p0');
     expect(calls).toHaveLength(4);
+    expect(calls.filter((u) => u === calls[0])).toHaveLength(1);
     expect(await r.progress('p0')).toMatchObject({ llmDone: 4 });
   });
 

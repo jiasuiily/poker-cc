@@ -130,6 +130,22 @@ describe('BatchRunner', () => {
     expect(calls).toHaveLength(4);
   });
 
+  it('does not send hands without hero decisions to the model, and does not count them as skipped', async () => {
+    const db = await setup();
+    const { llm, calls } = fakeLlm();
+    // p2 is the big blind: in the odd hands everyone folds to them, so they never act.
+    const r = runner(db, llm);
+    await r.start('p2');
+    await r.idle('p2');
+    expect(calls).toHaveLength(2);
+    expect(await r.progress('p2')).toMatchObject({ running: false, hands: 4, localDone: 4, llmSkipped: 0, reason: null });
+
+    const noLlm = runner(await setup(), null);
+    await noLlm.start('p2');
+    await noLlm.idle('p2');
+    expect(await noLlm.progress('p2')).toMatchObject({ llmSkipped: 2, reason: 'disabled' });
+  });
+
   it('reports zero hands for a player with none', async () => {
     const db = await setup();
     const r = runner(db, null);

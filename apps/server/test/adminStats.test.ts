@@ -7,6 +7,7 @@ import { createDb, type Db } from '../src/db/client.js';
 import { players, coachReports } from '../src/db/schema.js';
 import { saveHand } from '../src/history/repo.js';
 import { ensureLocalAnalysis } from '../src/analysis/service.js';
+import { takeQuota } from '../src/analysis/quota.js';
 import { adminPlayers } from '../src/stats/admin.js';
 import { tableJoined, tableLeft } from '../src/accounts/activity.js';
 import { mountApi, type ApiDeps } from '../src/api/index.js';
@@ -162,5 +163,36 @@ describe('admin player endpoints', () => {
     expect(reports.body).toHaveLength(1);
     expect(reports.body[0]).toMatchObject({ id: 'r1', text: '评估', status: 'ok' });
     expect((await call('/api/admin/players/nobody/reports', admin.token)).body).toEqual([]);
+  });
+
+  it('admin report payload carries no examples', async () => {
+    const { db, call, register } = await start();
+    const admin = await register('boss');
+    await db.update(players).set({ isAdmin: true }).where(eq(players.id, admin.playerId));
+    const u = await register('alice');
+    const stats = { ...summarizeDecisions([]), examples: [{ handId: 'h1', street: 'flop', actionSeq: 3, heroAction: { kind: 'call' }, recommended: { kind: 'fold' }, evLossBb: 1, reasons: ['AKs'] }] };
+    await db.insert(coachReports).values({ id: 'r1', playerId: u.playerId, status: 'ok', stats, text: '评估' });
+    const reports = await call(`/api/admin/players/${u.playerId}/reports`, admin.token);
+    expect(reports.body[0].stats).not.toHaveProperty('examples');
+    expect(reports.body[0].stats.decisions).toBe(0);
+    // the player's own view keeps them
+    const own = await call('/api/me/reports', u.token);
+    expect(own.body.reports[0].stats.examples).toHaveLength(1);
+  });
+});
+
+describe('GET /api/me/reports', () => {
+  it('returns reports with the remaining daily count, clamped at 0', async () => {
+    const { db, call, register } = await start();
+    const u = await register('alice');
+    let res = await call('/api/me/reports', u.token);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ reports: [], remainingToday: 3 });
+    await takeQuota(db, u.playerId, 'report', 99);
+    res = await call('/api/me/reports', u.token);
+    expect(res.body.remainingToday).toBe(2);
+    for (let i = 0; i < 4; i++) await takeQuota(db, u.playerId, 'report', 99);
+    res = await call('/api/me/reports', u.token);
+    expect(res.body.remainingToday).toBe(0);
   });
 });

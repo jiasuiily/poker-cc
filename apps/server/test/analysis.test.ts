@@ -94,6 +94,17 @@ describe('analysis service', () => {
     expect(got!.decisions.length).toBe(r.analysis.decisions.length);
   });
 
+  it('reports idle for a hand that was only analysed locally, failed after a real failed call', async () => {
+    const db = await setup();
+    await ensureLocalAnalysis(db, 't1-1', 'p0');
+    expect(await getAnalysis(db, 't1-1', 'p0')).toMatchObject({ llmStatus: 'idle', llmText: null });
+    const { llm } = fakeLlm('fail');
+    const r = await requestAnalysis(db, llm, 't1-1', 'p0', { dailyLimit: 30 });
+    if (r.status !== 'ok') throw new Error(r.status);
+    await r.job;
+    expect((await getAnalysis(db, 't1-1', 'p0'))!.llmStatus).toBe('failed');
+  });
+
   it('returns an empty decision list when the hero had nothing to decide', async () => {
     const db = await setup();
     // hand 3: button and SB fold; BB (p2) never acts

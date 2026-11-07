@@ -28,7 +28,9 @@ export function adminRoutes(deps: ApiDeps): Router {
   });
 
   r.get('/players/:id/reports', async (req, res) => {
-    res.json(await listReports(await deps.db(), req.params.id));
+    // Numbers and report text only: examples carry hand ids, actions and reasons.
+    const reports = await listReports(await deps.db(), req.params.id);
+    res.json(reports.map(({ stats: { examples: _examples, ...stats }, ...rest }) => ({ ...rest, stats })));
   });
 
   r.post('/users/:id/reset-password', async (req, res) => {

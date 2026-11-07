@@ -155,6 +155,22 @@ describe('createReport', () => {
     }
   });
 
+  it('listReports shows a pending row older than 120s as failed; a 30s-old one stays pending', async () => {
+    const db = await setup(1);
+    for (const [id, ageSec] of [['stale', 121], ['fresh', 30]] as const) {
+      await db.insert(coachReports).values({
+        id,
+        playerId: id === 'stale' ? 'p0' : 'p1',
+        status: 'pending',
+        stats: summarizeDecisions([]),
+        text: null,
+        createdAt: sql`now() - make_interval(secs => ${ageSec})` as unknown as Date,
+      });
+    }
+    expect((await listReports(db, 'p0'))[0]).toMatchObject({ id: 'stale', status: 'failed' });
+    expect((await listReports(db, 'p1'))[0]).toMatchObject({ id: 'fresh', status: 'pending' });
+  });
+
   it('yields to the event loop while catching up on unanalysed hands', async () => {
     const db = await setup();
     const { llm } = fakeLlm();

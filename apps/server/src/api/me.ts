@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import type { BatchRunner } from '../analysis/batch.js';
 import { HttpError } from '../http.js';
-import { createReport, listReports } from '../coach/service.js';
+import { usedToday } from '../analysis/quota.js';
+import { createReport, listReports, REPORT_DAILY_LIMIT } from '../coach/service.js';
 import { playerStats, playerTrend } from '../stats/player.js';
 import type { ApiDeps } from './index.js';
 import { requireUser, userOf } from './middleware.js';
@@ -38,7 +39,12 @@ export function meRoutes(deps: ApiDeps, runner: BatchRunner): Router {
   });
 
   r.get('/reports', async (_req, res) => {
-    res.json(await listReports(await deps.db(), userOf(res).playerId));
+    const db = await deps.db();
+    const { playerId } = userOf(res);
+    const reports = await listReports(db, playerId);
+    // Refused attempts also count, so the used number can exceed the limit.
+    const remainingToday = Math.max(0, REPORT_DAILY_LIMIT - (await usedToday(db, playerId, 'report')));
+    res.json({ reports, remainingToday });
   });
 
   return r;

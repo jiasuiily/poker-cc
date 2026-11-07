@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { ENGINE_VERSION } from '@poker/strategy';
 import type { Db } from '../db/client.js';
 import { handAnalyses, handPlayers } from '../db/schema.js';
@@ -81,12 +81,15 @@ export class BatchRunner {
     await ensureAllLocalAnalysis(db, playerId, ids, 'batch');
 
     // Step 2: commentary for hands that have none yet.
-    const okRows = await db
-      .select({ handId: handAnalyses.handId })
+    // Hands where the player never had a decision have nothing to explain.
+    const rows = await db
+      .select({ handId: handAnalyses.handId, llmStatus: handAnalyses.llmStatus, decisions: handAnalyses.decisions })
       .from(handAnalyses)
-      .where(and(eq(handAnalyses.playerId, playerId), eq(handAnalyses.llmStatus, 'ok')));
-    const ok = new Set(okRows.map((r) => r.handId));
-    const todo = ids.filter((id) => !ok.has(id));
+      .where(eq(handAnalyses.playerId, playerId));
+    const skip = new Set(
+      rows.filter((r) => r.llmStatus === 'ok' || (r.decisions as unknown[]).length === 0).map((r) => r.handId),
+    );
+    const todo = ids.filter((id) => !skip.has(id));
     state.llmQueued = todo.length;
 
     if (!this.opts.llm) {

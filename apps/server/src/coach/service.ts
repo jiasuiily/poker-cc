@@ -33,8 +33,22 @@ const toReport = (r: Row): CoachReport => ({
   text: r.text,
 });
 
-/** The player's reports, newest first. */
+/** A pending report that has been stuck for too long (e.g. the server restarted) is failed. */
+const failStaleReports = (db: Db, playerId: string) =>
+  db
+    .update(coachReports)
+    .set({ status: 'failed' })
+    .where(
+      and(
+        eq(coachReports.playerId, playerId),
+        eq(coachReports.status, 'pending'),
+        lt(coachReports.createdAt, sql`now() - make_interval(secs => ${STALE_REPORT_SECONDS})`),
+      ),
+    );
+
+/** The player's reports, newest first. Stale pending rows are marked failed first. */
 export async function listReports(db: Db, playerId: string): Promise<CoachReport[]> {
+  await failStaleReports(db, playerId);
   const rows = await db
     .select()
     .from(coachReports)
@@ -64,16 +78,7 @@ export async function createReport(
     .limit(1);
 
   // A pending report that has been stuck for too long no longer blocks a new one.
-  await db
-    .update(coachReports)
-    .set({ status: 'failed' })
-    .where(
-      and(
-        eq(coachReports.playerId, playerId),
-        eq(coachReports.status, 'pending'),
-        lt(coachReports.createdAt, sql`now() - make_interval(secs => ${STALE_REPORT_SECONDS})`),
-      ),
-    );
+  await failStaleReports(db, playerId);
 
   const id = `r_${randomUUID()}`;
   let row: Row | undefined;

@@ -45,7 +45,8 @@ export async function ensureAllLocalAnalysis(db: Db, playerId: string, handIds: 
   }
 }
 
-export type LlmStatus = 'pending' | 'ok' | 'failed' | 'disabled' | 'limited';
+/** 'idle' is only ever reported (never stored): the commentary has not been attempted yet. */
+export type LlmStatus = 'pending' | 'ok' | 'failed' | 'disabled' | 'limited' | 'idle';
 
 export interface AnalysisResponse {
   decisions: DecisionReport[];
@@ -65,7 +66,9 @@ export async function getAnalysis(db: Db, handId: string, playerId: string): Pro
     .from(handAnalyses)
     .where(and(eq(handAnalyses.handId, handId), eq(handAnalyses.playerId, playerId)));
   if (!row) return null;
-  return { decisions: row.decisions as DecisionReport[], llmStatus: row.llmStatus as LlmStatus, llmText: row.llmText };
+  // ensureLocalAnalysis stores 'failed' with an epoch createdAt as the "never attempted" marker.
+  const idle = row.llmStatus === 'failed' && row.createdAt.getTime() === 0;
+  return { decisions: row.decisions as DecisionReport[], llmStatus: idle ? 'idle' : (row.llmStatus as LlmStatus), llmText: row.llmText };
 }
 
 /** A 'pending' LLM step older than this is treated as abandoned (e.g. the server restarted). */

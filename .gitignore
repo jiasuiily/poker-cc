@@ -8,3 +8,4 @@ dist/
 data/
 deploy/backups/
 .claude/settings.local.json
+.claude/worktrees/

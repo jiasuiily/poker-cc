@@ -48,7 +48,7 @@ export function mountApi(app: Application, deps: ApiDeps): void {
   app.use('/api/me', meRoute(deps));
   const runner = new BatchRunner({ db: deps.db, llm: deps.llm, dailyLimit: deps.llmBatchDailyLimit });
   app.use('/api/me', meRoutes(deps, runner));
-  app.use('/api/admin', adminRoutes(deps));
+  app.use('/api/admin', adminRoutes(deps, runner));
   app.use('/api/tables', tableRoutes(deps));
   app.use('/api/hands', handRoutes(deps));
   app.use('/api', (_req, res) => void res.status(404).json({ error: '接口不存在' }));

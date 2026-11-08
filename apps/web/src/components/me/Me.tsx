@@ -14,7 +14,7 @@ const RANGES: [StatsRange, string][] = [
 type Stats = PlayerStats & { unanalyzed: number };
 
 /** The 「我的」 tab: stats cards, daily trend, one-click analysis and overall reports. */
-export function Me({ session, onAuthExpired }: { session: Session; onAuthExpired: () => void }) {
+export function Me({ session, onAuthExpired, asPlayer }: { session: Session; onAuthExpired: () => void; /** Admin: review this player instead of yourself. */ asPlayer?: string }) {
   const [range, setRange] = useState<StatsRange>('30d');
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsErr, setStatsErr] = useState<string | null>(null);
@@ -35,22 +35,22 @@ export function Me({ session, onAuthExpired }: { session: Session; onAuthExpired
     const mine = ++seq.current;
     setStatsErr(null);
     try {
-      const s = await api.me.stats(session.token, range);
+      const s = await api.me.stats(session.token, range, asPlayer);
       if (alive.current && mine === seq.current) setStats(s);
     } catch (e) {
       if (alive.current && mine === seq.current) fail(e, setStatsErr, '加载失败');
     }
-  }, [session.token, range, fail]);
+  }, [session.token, range, fail, asPlayer]);
 
   const loadTrend = useCallback(async () => {
     setTrendErr(null);
     try {
-      const t = await api.me.trend(session.token, 30);
+      const t = await api.me.trend(session.token, 30, asPlayer);
       if (alive.current) setTrend(t);
     } catch (e) {
       if (alive.current) fail(e, setTrendErr, '加载失败');
     }
-  }, [session.token, fail]);
+  }, [session.token, fail, asPlayer]);
 
   useEffect(() => {
     alive.current = true;
@@ -104,7 +104,7 @@ export function Me({ session, onAuthExpired }: { session: Session; onAuthExpired
             {stats.unanalyzed > 0 ? `这个范围内还没有分析过的牌局（${stats.unanalyzed} 手待分析），点下面的一键分析。` : '这个范围内还没有牌局，先去打几手吧。'}
           </p>
         ) : (
-          <StatsCards stats={stats} />
+          <StatsCards stats={stats} handHref={(id) => (asPlayer ? `#/admin/player/${asPlayer}/hand/${id}` : `#/hand/${id}`)} />
         )}
       </section>
 
@@ -126,8 +126,8 @@ export function Me({ session, onAuthExpired }: { session: Session; onAuthExpired
         )}
       </section>
 
-      <BatchPanel session={session} onAuthExpired={onAuthExpired} onFinished={refresh} />
-      <ReportsPanel session={session} onAuthExpired={onAuthExpired} />
+      <BatchPanel session={session} onAuthExpired={onAuthExpired} onFinished={refresh} asPlayer={asPlayer} />
+      <ReportsPanel session={session} onAuthExpired={onAuthExpired} asPlayer={asPlayer} />
     </div>
   );
 }
@@ -141,7 +141,7 @@ function Card({ label, value, tone }: { label: string; value: string; tone?: str
   );
 }
 
-function StatsCards({ stats: s }: { stats: Stats }) {
+function StatsCards({ stats: s, handHref }: { stats: Stats; handHref: (handId: string) => string }) {
   const streets = (Object.keys(STREET_NAMES) as (keyof typeof STREET_NAMES)[]).filter((k) => s.byStreet[k].decisions > 0);
   return (
     <div className="space-y-3">
@@ -205,7 +205,7 @@ function StatsCards({ stats: s }: { stats: Stats }) {
           <ul className="space-y-1.5 text-sm">
             {s.examples.map((e) => (
               <li key={`${e.handId}-${e.actionSeq}`}>
-                <a href={`#/hand/${e.handId}`} className="flex justify-between gap-2 hover:text-emerald-300">
+                <a href={handHref(e.handId)} className="flex justify-between gap-2 hover:text-emerald-300">
                   <span className="min-w-0">
                     {STREET_NAMES[e.street]}：{actionText(e.heroAction)}
                     <span className="text-white/50">（建议{actionText(e.recommended)}）</span>

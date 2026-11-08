@@ -69,9 +69,18 @@ function PlayerRow({ p, open, onToggle, session }: { p: AdminPlayerRow; open: bo
     <Fragment>
       <tr className="cursor-pointer border-t border-white/5 hover:bg-white/5" onClick={onToggle}>
         <td className="py-1.5 pr-3">
-          <button aria-expanded={open} className="text-left font-medium">
-            {p.displayName} <span className="text-white/40">@{p.username}</span>
-          </button>
+          <span className="flex items-center gap-2 whitespace-nowrap">
+            <button aria-expanded={open} className="text-left font-medium">
+              {p.displayName} <span className="text-white/40">@{p.username}</span>
+            </button>
+            <a
+              href={`#/admin/player/${p.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="rounded-md px-1.5 py-0.5 text-xs text-emerald-300 ring-1 ring-emerald-400/40 hover:bg-emerald-500/10"
+            >
+              查看分析
+            </a>
+          </span>
         </td>
         <td className="py-1.5 pr-3">
           <span className={p.online ? 'text-emerald-400' : 'text-white/25'} title={p.online ? '在线' : '离线'}>

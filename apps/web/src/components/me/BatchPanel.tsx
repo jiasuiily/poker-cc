@@ -8,10 +8,12 @@ export function BatchPanel({
   session,
   onAuthExpired,
   onFinished,
+  asPlayer,
 }: {
   session: Session;
   onAuthExpired: () => void;
   onFinished: () => void;
+  asPlayer?: string;
 }) {
   const [progress, setProgress] = useState<BatchProgress | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -40,30 +42,30 @@ export function BatchPanel({
   useEffect(() => {
     alive.current = true;
     api.me
-      .analyzeProgress(session.token)
+      .analyzeProgress(session.token, asPlayer)
       .then(apply)
       .catch((e) => alive.current && handle(e));
     return () => {
       alive.current = false;
     };
-  }, [session.token, apply, handle]);
+  }, [session.token, apply, handle, asPlayer]);
 
   const running = progress?.running ?? false;
   useEffect(() => {
     if (!running) return;
     const id = setInterval(() => {
       api.me
-        .analyzeProgress(session.token)
+        .analyzeProgress(session.token, asPlayer)
         .then(apply)
         .catch((e) => alive.current && handle(e));
     }, 2000);
     return () => clearInterval(id);
-  }, [running, session.token, apply, handle]);
+  }, [running, session.token, apply, handle, asPlayer]);
 
   const start = async () => {
     setStarting(true);
     try {
-      apply(await api.me.analyzeAll(session.token));
+      apply(await api.me.analyzeAll(session.token, asPlayer));
     } catch (e) {
       if (alive.current) handle(e);
     } finally {

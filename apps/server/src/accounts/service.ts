@@ -118,6 +118,17 @@ export async function adminResetPassword(db: Db, id: string): Promise<string> {
   return temp;
 }
 
+/** Admin chooses the new password; old logins stop working (token version bump). */
+export async function adminSetPassword(db: Db, id: string, password: unknown): Promise<void> {
+  const passwordHash = await hash(validatePassword(password));
+  const updated = await db
+    .update(players)
+    .set({ passwordHash, tokenVersion: sql`${players.tokenVersion} + 1` })
+    .where(and(eq(players.id, id), sql`${players.username} is not null`))
+    .returning({ id: players.id });
+  if (updated.length === 0) throw new HttpError(404, '账号不存在');
+}
+
 /** `expiresInDays` may be negative (tests); omitted = never expires. */
 export async function createInvites(db: Db, createdBy: string | null, count: number, expiresInDays?: number): Promise<string[]> {
   const n = Math.max(1, Math.min(50, Math.floor(count)));

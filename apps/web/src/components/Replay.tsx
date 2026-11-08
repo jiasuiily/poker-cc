@@ -8,19 +8,32 @@ import { Felt, type FeltSeat } from './Felt';
 
 const STEP_MS = 1200;
 
-export function Replay({ handId, session, onBack, onAuthExpired }: { handId: string; session: Session; onBack: () => void; onAuthExpired: () => void }) {
+export function Replay({
+  handId,
+  session,
+  onBack,
+  onAuthExpired,
+  asPlayer,
+}: {
+  handId: string;
+  session: Session;
+  onBack: () => void;
+  onAuthExpired: () => void;
+  /** Admin: replay this hand from that player's seat. */
+  asPlayer?: string;
+}) {
   const [data, setData] = useState<{ hand: HandMeta; frames: ReplayFrame[] } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [idx, setIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const analysis = useAnalysis(session, handId);
+  const analysis = useAnalysis(session, handId, asPlayer);
 
   useEffect(() => {
     let alive = true;
     // A hand that just ended may still be saving: retry a 404 a couple of times.
     const load = async (attempt: number) => {
       try {
-        const d = await api.getHand(session.token, handId);
+        const d = await api.getHand(session.token, handId, asPlayer);
         if (!alive) return;
         setData(d);
         setIdx(0);
@@ -35,7 +48,7 @@ export function Replay({ handId, session, onBack, onAuthExpired }: { handId: str
     return () => {
       alive = false;
     };
-  }, [session.token, handId, onAuthExpired]);
+  }, [session.token, handId, onAuthExpired, asPlayer]);
 
   const last = (data?.frames.length ?? 1) - 1;
 
@@ -63,7 +76,7 @@ export function Replay({ handId, session, onBack, onAuthExpired }: { handId: str
       <div className="flex min-h-full flex-col items-center justify-center gap-4 p-4">
         <p className="text-white/80">{err}</p>
         <button onClick={onBack} className="rounded-lg bg-emerald-500 px-4 py-2 font-semibold text-emerald-950">
-          返回大厅
+          {asPlayer ? '返回' : '返回大厅'}
         </button>
       </div>
     );
@@ -88,7 +101,7 @@ export function Replay({ handId, session, onBack, onAuthExpired }: { handId: str
     <div className="mx-auto flex min-h-full max-w-5xl flex-col px-2 pt-2 pb-[max(env(safe-area-inset-bottom),8px)] sm:px-4">
       <header className="mb-2 flex items-center justify-between gap-2 text-sm">
         <button onClick={onBack} className="rounded-md px-2 py-1 text-white/70 ring-1 ring-white/15">
-          ← 大厅
+          {asPlayer ? '← 返回' : '← 大厅'}
         </button>
         <div className="truncate text-center">
           <div className="truncate font-medium">{hand.tableName}</div>

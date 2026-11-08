@@ -6,15 +6,22 @@ import { TablePage } from './components/TablePage';
 import { Replay } from './components/Replay';
 import { Account } from './components/Account';
 import { Admin } from './components/Admin';
+import { AdminPlayerView } from './components/AdminPlayerView';
 
 type Route =
   | { kind: 'lobby'; tab: 'tables' | 'history' | 'me' }
   | { kind: 'table'; id: string }
   | { kind: 'hand'; id: string }
   | { kind: 'account' }
-  | { kind: 'admin' };
+  | { kind: 'admin' }
+  | { kind: 'adminPlayer'; playerId: string }
+  | { kind: 'adminHand'; playerId: string; id: string };
 
 function parseHash(): Route {
+  const ah = location.hash.match(/^#\/admin\/player\/([\w-]+)\/hand\/([\w-]+)/);
+  if (ah) return { kind: 'adminHand', playerId: ah[1]!, id: ah[2]! };
+  const ap = location.hash.match(/^#\/admin\/player\/([\w-]+)/);
+  if (ap) return { kind: 'adminPlayer', playerId: ap[1]! };
   const t = location.hash.match(/^#\/table\/([\w-]+)/);
   if (t) return { kind: 'table', id: t[1]! };
   const h = location.hash.match(/^#\/hand\/([\w-]+)/);
@@ -55,6 +62,21 @@ export function App() {
   if (!session) return <Login onLogin={login} />;
   if (route.kind === 'account') return <Account session={session} onBack={() => (location.hash = '')} onSession={login} />;
   if (route.kind === 'admin' && session.isAdmin) return <Admin session={session} onBack={() => (location.hash = '')} />;
+  if (route.kind === 'adminPlayer' && session.isAdmin)
+    return (
+      <AdminPlayerView key={route.playerId} playerId={route.playerId} session={session} onBack={() => (location.hash = '/admin')} onAuthExpired={logout} />
+    );
+  if (route.kind === 'adminHand' && session.isAdmin)
+    return (
+      <Replay
+        key={`${route.playerId}-${route.id}`}
+        handId={route.id}
+        asPlayer={route.playerId}
+        session={session}
+        onBack={() => (location.hash = `/admin/player/${route.playerId}`)}
+        onAuthExpired={logout}
+      />
+    );
   if (route.kind === 'table')
     return <TablePage key={route.id} roomId={route.id} session={session} onExit={() => (location.hash = '')} onAuthExpired={logout} />;
   if (route.kind === 'hand')

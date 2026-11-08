@@ -64,13 +64,16 @@ export const api = {
     call<Session>('/api/auth/register', { method: 'POST', body: JSON.stringify(input) }),
   changePassword: (token: string, oldPassword: string, newPassword: string) =>
     call<Session>('/api/auth/password', { method: 'POST', body: JSON.stringify({ oldPassword, newPassword }), token }),
+  /** A player's review. `asPlayer` (admin only) reviews that player instead of yourself. */
   me: {
-    stats: (token: string, range: StatsRange) => call<PlayerStats & { unanalyzed: number }>(`/api/me/stats?range=${range}`, { token }),
-    trend: (token: string, days = 30) => call<TrendDay[]>(`/api/me/trend?days=${days}`, { token }),
-    analyzeAll: (token: string) => call<BatchProgress>('/api/me/analyze-all', { method: 'POST', token }),
-    analyzeProgress: (token: string) => call<BatchProgress>('/api/me/analyze-all', { token }),
-    reports: (token: string) => call<{ reports: CoachReport[]; remainingToday: number }>('/api/me/reports', { token }),
-    createReport: (token: string) => call<CoachReport>('/api/me/reports', { method: 'POST', token }),
+    stats: (token: string, range: StatsRange, asPlayer?: string) =>
+      call<PlayerStats & { unanalyzed: number }>(`${reviewBase(asPlayer)}/stats?range=${range}`, { token }),
+    trend: (token: string, days = 30, asPlayer?: string) => call<TrendDay[]>(`${reviewBase(asPlayer)}/trend?days=${days}`, { token }),
+    analyzeAll: (token: string, asPlayer?: string) => call<BatchProgress>(`${reviewBase(asPlayer)}/analyze-all`, { method: 'POST', token }),
+    analyzeProgress: (token: string, asPlayer?: string) => call<BatchProgress>(`${reviewBase(asPlayer)}/analyze-all`, { token }),
+    reports: (token: string, asPlayer?: string) =>
+      call<{ reports: CoachReport[]; remainingToday: number }>(`${reviewBase(asPlayer)}/reports`, { token }),
+    createReport: (token: string, asPlayer?: string) => call<CoachReport>(`${reviewBase(asPlayer)}/reports`, { method: 'POST', token }),
   },
   admin: {
     invites: (token: string) => call<InviteRow[]>('/api/admin/invites', { token }),
@@ -82,17 +85,31 @@ export const api = {
       call<CoachReport[]>(`/api/admin/players/${encodeURIComponent(id)}/reports`, { token }),
     resetPassword: (token: string, id: string) =>
       call<{ password: string }>(`/api/admin/users/${encodeURIComponent(id)}/reset-password`, { method: 'POST', token }),
+    setPassword: (token: string, id: string, password: string) =>
+      call<{ ok: true }>(`/api/admin/users/${encodeURIComponent(id)}/password`, { method: 'POST', body: JSON.stringify({ password }), token }),
+    player: (token: string, id: string) =>
+      call<{ id: string; displayName: string; username: string }>(`/api/admin/players/${encodeURIComponent(id)}`, { token }),
   },
   listTables: () => call<TableListing[]>('/api/tables'),
   createTable: (token: string, opts: CreateTableOptions) =>
     call<{ roomId: string }>('/api/tables', { method: 'POST', body: JSON.stringify(opts), token }),
   listHands: (token: string, before?: string) =>
     call<{ items: HandListItem[]; next: string | null }>(`/api/hands?limit=20${before ? `&before=${encodeURIComponent(before)}` : ''}`, { token }),
-  getHand: (token: string, id: string) => call<{ hand: HandMeta; frames: ReplayFrame[] }>(`/api/hands/${encodeURIComponent(id)}`, { token }),
-  requestAnalysis: (token: string, id: string) =>
-    call<AnalysisResponse>(`/api/hands/${encodeURIComponent(id)}/analysis`, { method: 'POST', token }),
-  getAnalysis: (token: string, id: string) => call<AnalysisResponse>(`/api/hands/${encodeURIComponent(id)}/analysis`, { token }),
+  getHand: (token: string, id: string, asPlayer?: string) =>
+    call<{ hand: HandMeta; frames: ReplayFrame[] }>(`${handBase(asPlayer)}/${encodeURIComponent(id)}`, { token }),
+  requestAnalysis: (token: string, id: string, asPlayer?: string) =>
+    call<AnalysisResponse>(`${handBase(asPlayer)}/${encodeURIComponent(id)}/analysis`, { method: 'POST', token }),
+  getAnalysis: (token: string, id: string, asPlayer?: string) =>
+    call<AnalysisResponse>(`${handBase(asPlayer)}/${encodeURIComponent(id)}/analysis`, { token }),
 };
+
+/** Where a player's review lives: your own at /api/me, another player's under the admin API. */
+function reviewBase(asPlayer?: string): string {
+  return asPlayer ? `/api/admin/players/${encodeURIComponent(asPlayer)}/review` : '/api/me';
+}
+function handBase(asPlayer?: string): string {
+  return asPlayer ? `${reviewBase(asPlayer)}/hands` : '/api/hands';
+}
 
 export type StatsRange = '7d' | '30d' | 'all';
 export type LeakKind = 'preflopLoose' | 'preflopTight' | 'callTooWide' | 'foldTooMuch' | 'passive' | 'aggressive' | 'sizing';

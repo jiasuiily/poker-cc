@@ -1,13 +1,33 @@
 import { Router } from 'express';
-import { adminResetPassword, createInvites, listInvites, listUsers } from '../accounts/service.js';
+import type { BatchRunner } from '../analysis/batch.js';
+import { adminResetPassword, adminSetPassword, createInvites, getAccount, listInvites, listUsers } from '../accounts/service.js';
 import { listReports } from '../coach/service.js';
+import { HttpError } from '../http.js';
 import { adminPlayers } from '../stats/admin.js';
 import type { ApiDeps } from './index.js';
+import { playerReviewRoutes } from './me.js';
 import { requireAdmin, requireUser, userOf } from './middleware.js';
 
-export function adminRoutes(deps: ApiDeps): Router {
+export function adminRoutes(deps: ApiDeps, runner: BatchRunner): Router {
   const r = Router();
   r.use(requireUser(deps), requireAdmin);
+
+  r.get('/players/:id', async (req, res) => {
+    const a = await getAccount(await deps.db(), req.params.id);
+    if (!a) throw new HttpError(404, '没有这个玩家');
+    res.json({ id: a.id, displayName: a.displayName, username: a.username });
+  });
+
+  // The admin sees and runs a player's review exactly as the player would (their data, their quotas).
+  r.use(
+    '/players/:id/review',
+    playerReviewRoutes(deps, runner, (req) => String(req.params.id)),
+  );
+
+  r.post('/users/:id/password', async (req, res) => {
+    await adminSetPassword(await deps.db(), req.params.id, req.body?.password);
+    res.json({ ok: true });
+  });
 
   r.get('/invites', async (_req, res) => {
     res.json(await listInvites(await deps.db()));

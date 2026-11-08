@@ -47,6 +47,19 @@ export function Admin({ session, onBack }: { session: Session; onBack: () => voi
     }
   };
 
+  const doSetPassword = async (u: UserRow) => {
+    const pw = prompt(`给 ${u.displayName}（${u.username}）设置新密码（至少 6 位）。对方在所有设备上都会被退出登录。`);
+    if (pw === null) return;
+    if (pw.length < 6) return setErr('密码至少 6 位');
+    try {
+      await api.admin.setPassword(session.token, u.id, pw);
+      setErr(null);
+      setReset({ name: u.displayName, password: pw });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '设置失败');
+    }
+  };
+
   return (
     <div className="mx-auto max-w-3xl p-4 pb-16">
       <header className="mb-6 flex items-center gap-3">
@@ -118,7 +131,7 @@ export function Admin({ session, onBack }: { session: Session; onBack: () => voi
         <h2 className="mb-3 font-semibold">用户</h2>
         {reset && (
           <p className="mb-3 rounded-lg bg-amber-500/15 p-3 text-sm" role="status">
-            {reset.name} 的临时密码：<span className="font-mono font-semibold">{reset.password}</span>（请转告对方登录后修改）
+            {reset.name} 的新密码：<span className="font-mono font-semibold">{reset.password}</span>（请转告对方，登录后可在「账号」里修改）
           </p>
         )}
         <ul className="divide-y divide-white/5 text-sm">
@@ -129,9 +142,14 @@ export function Admin({ session, onBack }: { session: Session; onBack: () => voi
                 {u.isAdmin && <span className="ml-2 rounded bg-sky-500/20 px-1 text-xs text-sky-200">管理员</span>}
               </span>
               {u.id !== session.playerId && (
-                <button onClick={() => doReset(u)} className="rounded-md px-2 py-1 text-white/70 ring-1 ring-white/15 hover:text-white">
-                  重置密码
-                </button>
+                <span className="flex shrink-0 gap-2">
+                  <button onClick={() => doSetPassword(u)} className="rounded-md px-2 py-1 text-white/70 ring-1 ring-white/15 hover:text-white">
+                    设置密码
+                  </button>
+                  <button onClick={() => doReset(u)} className="rounded-md px-2 py-1 text-white/70 ring-1 ring-white/15 hover:text-white">
+                    重置密码
+                  </button>
+                </span>
               )}
             </li>
           ))}

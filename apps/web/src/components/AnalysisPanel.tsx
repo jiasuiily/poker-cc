@@ -12,7 +12,7 @@ const LLM_TEXT: Record<string, string> = {
 };
 
 /** Loads an existing analysis, or runs one on demand; polls while the LLM commentary is pending. */
-export function useAnalysis(session: Session, handId: string) {
+export function useAnalysis(session: Session, handId: string, asPlayer?: string) {
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -20,7 +20,7 @@ export function useAnalysis(session: Session, handId: string) {
   useEffect(() => {
     let alive = true;
     api
-      .getAnalysis(session.token, handId)
+      .getAnalysis(session.token, handId, asPlayer)
       .then((a) => alive && setAnalysis(a))
       .catch((e) => {
         if (alive && !(e instanceof HttpError && e.status === 404)) setErr(e instanceof Error ? e.message : '加载失败');
@@ -28,7 +28,7 @@ export function useAnalysis(session: Session, handId: string) {
     return () => {
       alive = false;
     };
-  }, [session.token, handId]);
+  }, [session.token, handId, asPlayer]);
 
   // Poll every 2 s for at most 40 s while commentary is pending.
   useEffect(() => {
@@ -37,7 +37,7 @@ export function useAnalysis(session: Session, handId: string) {
     const id = setInterval(async () => {
       tries++;
       try {
-        const a = await api.getAnalysis(session.token, handId);
+        const a = await api.getAnalysis(session.token, handId, asPlayer);
         setAnalysis(a);
         if (a.llmStatus !== 'pending') clearInterval(id);
       } catch {
@@ -49,13 +49,13 @@ export function useAnalysis(session: Session, handId: string) {
       }
     }, 2000);
     return () => clearInterval(id);
-  }, [analysis?.llmStatus, session.token, handId]);
+  }, [analysis?.llmStatus, session.token, handId, asPlayer]);
 
   const run = async () => {
     setBusy(true);
     setErr(null);
     try {
-      setAnalysis(await api.requestAnalysis(session.token, handId));
+      setAnalysis(await api.requestAnalysis(session.token, handId, asPlayer));
     } catch (e) {
       setErr(e instanceof Error ? e.message : '分析失败');
     } finally {

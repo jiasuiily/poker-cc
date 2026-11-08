@@ -6,7 +6,7 @@ const fmtTime = (iso: string) =>
   new Date(iso).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 /** Overall coaching reports: generate, poll while pending, show the newest in full and fold the rest. */
-export function ReportsPanel({ session, onAuthExpired }: { session: Session; onAuthExpired: () => void }) {
+export function ReportsPanel({ session, onAuthExpired, asPlayer }: { session: Session; onAuthExpired: () => void; asPlayer?: string }) {
   const [reports, setReports] = useState<CoachReport[] | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -24,7 +24,7 @@ export function ReportsPanel({ session, onAuthExpired }: { session: Session; onA
 
   const load = useCallback(async () => {
     try {
-      const list = await api.me.reports(session.token);
+      const list = await api.me.reports(session.token, asPlayer);
       if (!alive.current) return;
       setReports(list.reports);
       setRemaining(list.remainingToday);
@@ -32,7 +32,7 @@ export function ReportsPanel({ session, onAuthExpired }: { session: Session; onA
     } catch (e) {
       if (alive.current) handle(e, setLoadErr, '加载失败');
     }
-  }, [session.token, handle]);
+  }, [session.token, handle, asPlayer]);
 
   useEffect(() => {
     alive.current = true;
@@ -53,7 +53,7 @@ export function ReportsPanel({ session, onAuthExpired }: { session: Session; onA
     setCreating(true);
     setActionErr(null);
     try {
-      const r = await api.me.createReport(session.token);
+      const r = await api.me.createReport(session.token, asPlayer);
       if (alive.current) setReports((prev) => [r, ...(prev ?? []).filter((x) => x.id !== r.id)]);
     } catch (e) {
       if (alive.current) handle(e, setActionErr, '生成失败');
